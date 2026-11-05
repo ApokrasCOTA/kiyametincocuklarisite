@@ -258,7 +258,10 @@ const R = {
       side += linkBtns;
       if (sibs.length > 1) side += `<h4>Sezonun bölümleri</h4>` + sibs.map((y) => (y.id === x.id ? `<b>${y.sort ? y.sort + ". " : ""}${esc(y.title)}</b>` : `<a href="/icerik?id=${y.id}">${y.sort ? y.sort + ". " : ""}${esc(y.title)}</a>`)).join("");
     } else {
-      top = x.cover_url ? `<figure><img src="${safeUrl(x.cover_url)}" alt="${esc(x.title)}"></figure>` : "";
+      const gameUrl = x.type === "oyun" ? safeUrl(x.meta?.embed) : "";
+      top = gameUrl
+        ? `<div class="game-frame" id="gameFrame"><iframe src="${gameUrl}" title="${esc(x.title)}" allow="fullscreen; autoplay; gamepad" allowfullscreen></iframe></div><div class="acts game-acts"><button class="btn seal" id="gameFs">Tam ekran oyna</button></div>`
+        : x.cover_url ? `<figure><img src="${safeUrl(x.cover_url)}" alt="${esc(x.title)}"></figure>` : "";
       if (x.type === "kitap") { const st = STATUS[x.meta?.status] || STATUS.yayinda; side = `<span class="pill${st[1]}">${st[0]}</span>`; }
       if (x.type === "oyun" && x.meta?.tag) side = `<span class="pill">${esc(x.meta.tag)}</span>`;
       side += linkBtns + (fileUrl ? `<a class="btn${links.length ? "" : " seal"}" href="${fileUrl}" target="_blank" rel="noopener">${x.type === "oyun" ? "Dosyayı indir" : "Dosyayı aç"}</a>` : "");
@@ -272,13 +275,15 @@ const R = {
       const i = sibs.findIndex((y) => y.id === x.id), pv = sibs[i - 1], nx = sibs[i + 1];
       nav = `<div style="display:flex;justify-content:space-between;gap:12px;margin-top:28px;flex-wrap:wrap">${pv ? `<a class="btn small" href="/icerik?id=${pv.id}">← Önceki bölüm</a>` : "<span></span>"}${nx ? `<a class="btn small" href="/icerik?id=${nx.id}">Sonraki bölüm →</a>` : ""}</div>`;
     }
-    app.innerHTML = `<section class="article"><div class="prose"${x.type === "frp" || x.type === "fanzin" ? ' style="max-width:none"' : ""}>${top}${md(x.body)}${gallery}${nav}</div>
+    app.innerHTML = `<section class="article"><div class="prose"${x.type === "frp" || x.type === "fanzin" || (x.type === "oyun" && x.meta?.embed) ? ' style="max-width:none"' : ""}>${top}${md(x.body)}${gallery}${nav}</div>
       <aside class="aside"><h4>${TYPE_LABEL[x.type]}</h4>${side}<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${likeBtn(x.id)}${ccSpan(x.id, true)}</div></aside></section>
       <section class="comments" id="yorumlar"><div class="sec-head"><h2>Yorumlar</h2></div><div id="cList"><p class="loading">Yükleniyor…</p></div>
        <form class="box" id="commentForm"><label for="c-n">Adın<input type="text" id="c-n" required maxlength="60"></label>
         <label for="c-b">Yorumun<textarea id="c-b" required maxlength="2000"></textarea></label>
         <p class="fine">Yorumlar yazar onayladıktan sonra yayınlanır. Yazdığın isim ve yorum saklanır; kişisel bilgi paylaşma.</p>
         <button class="btn seal" type="submit">Yorumu gönder</button><div id="cOut" aria-live="polite"></div></form></section>`;
+    const fs = $("#gameFs");
+    if (fs) fs.onclick = () => { const el = $("#gameFrame"); (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el); };
     if (photos.length) $$("[data-ph]").forEach((b) => (b.onclick = () => openLb(photos, +b.dataset.ph)));
     fillStats([x.id]);
     loadComments(x.id);

@@ -290,7 +290,8 @@ async function postEditor(p, x, back) {
   const fileLab = { fanzin: "PDF dosyası", muzik: "Müzik dosyası (MP3)", oyun: "İndirilebilir dosya (APK vb., isteğe bağlı)", haber: "Ek dosya (isteğe bağlı)", kitap: "Ek dosya, örn. ilk bölüm PDF (isteğe bağlı)" }[t];
   const linkHelp = { kitap: "Satın alma linkleri", oyun: "Oyun linkleri (Google Play, tarayıcıda oyna…)", fanzin: "Ek linkler", muzik: "Ek linkler (Spotify, YouTube…)", haber: "Ek linkler", frp: "Ek linkler" }[t];
   let extra = "";
-  if (t === "oyun") extra = `<label for="m-tag">Etiket (kartta görünür)<input type="text" id="m-tag" value="${esc(m.tag || "")}" placeholder="Android · Tarayıcı"></label>`;
+  if (t === "oyun") extra = `<label for="m-tag">Etiket (kartta görünür)<input type="text" id="m-tag" value="${esc(m.tag || "")}" placeholder="Android · Tarayıcı"></label>
+    <label for="m-embed">Sitede oynatılacak oyunun adresi (oyun bu sayfanın içinde açılır)<input type="text" id="m-embed" value="${esc(m.embed || "")}" placeholder="https://apokrascota.github.io/kartsavasi/"></label>`;
   if (t === "fanzin") extra = `<div class="row"><label for="m-pages">Sayfa sayısı<input type="number" id="m-pages" value="${esc(m.pages || "")}"></label><label for="m-idate">Sayı tarihi (kartta görünür)<input type="text" id="m-idate" value="${esc(m.issue_date || "")}" placeholder="Kasım 2026"></label></div>`;
   if (t === "kitap") extra = `<label for="m-status">Durum<select id="m-status">${[["yayinda", "Yayında"], ["yakinda", "Yakında"], ["muhurlu", "Mühürlü (henüz açıklanmadı)"]].map(([v, l]) => `<option value="${v}"${(m.status || "yayinda") === v ? " selected" : ""}>${l}</option>`).join("")}</select></label>`;
   if (t === "muzik") extra = `<div class="row"><label class="check"><input type="checkbox" id="m-ai"${m.ai ? " checked" : ""}> AI destekli (işaretli değilse AI'sız bölümünde görünür)</label><label for="m-dur">Süre<input type="text" id="m-dur" value="${esc(m.duration || "")}" placeholder="3:13"></label></div>`;
@@ -318,7 +319,7 @@ async function postEditor(p, x, back) {
   $("#ed-save").onclick = async () => {
     if (!val("ed-title")) { toast("Başlık boş olamaz.", true); return; }
     const meta = { ...m };
-    if (t === "oyun") meta.tag = val("m-tag");
+    if (t === "oyun") { meta.tag = val("m-tag"); meta.embed = val("m-embed"); }
     if (t === "fanzin") { meta.pages = val("m-pages"); meta.issue_date = val("m-idate"); }
     if (t === "kitap") meta.status = val("m-status");
     if (t === "muzik") { meta.ai = $("#m-ai").checked; meta.duration = val("m-dur"); }
