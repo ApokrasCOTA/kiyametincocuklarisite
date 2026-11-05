@@ -311,3 +311,4 @@ body.custom-bg::before{background:linear-gradient(rgba(12,10,9,var(--bg-dim,.72)
 .game-frame:fullscreen{height:100%;border:0}
 .game-acts{justify-content:flex-start;display:flex;gap:10px;margin:0 0 1.4em}
 @media (max-width:700px){.game-frame{height:72vh}}
+label input,label textarea,label select,input[type=text],input[type=email],input[type=password],input[type=number],input[type=datetime-local],textarea,select{font-family:var(--font-body);text-transform:none;letter-spacing:normal}
