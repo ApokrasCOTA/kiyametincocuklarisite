@@ -266,10 +266,54 @@ async function contentPane(p, type = p.dataset.type || "haber") {
   const { data } = await q;
   p.innerHTML = `<h2>İçerikler</h2><div class="pills">${CONTENT_TYPES.map((t) => `<button data-ct="${t}" class="${t === type ? "on" : ""}">${TYPE_LABEL[t]}</button>`).join("")}</div>
    <div><button class="btn seal" id="newPost">Yeni ${TYPE_LABEL[type].toLowerCase()} ekle</button></div>
+   ${type === "muzik" ? `<div class="box bulk"><b style="font-family:var(--font-display);letter-spacing:.1em">Toplu müzik yükle</b>
+     <p class="help">Birden fazla müzik dosyasını aynı anda seç. Her biri ayrı bir müzik olarak eklenir; adı dosyanın adından, süresi dosyadan otomatik alınır. Kapak görselini ve açıklamayı sonra "Düzenle"den ekleyebilirsin.</p>
+     <label class="check"><input type="checkbox" id="bk-ai"> Bu müzikler AI destekli (işaretsizse AI'sız bölümüne eklenir)</label>
+     <input type="file" id="bk-in" accept="audio/*,.mp3,.wav,.ogg,.m4a" multiple aria-label="Müzik dosyaları">
+     <div class="progress" id="bk-prog" hidden><i></i></div><div id="bk-log" class="fine"></div></div>` : ""}
    <div>${postRows(data, type === "kitap")}</div>`;
   $$("[data-ct]", p).forEach((b) => (b.onclick = () => contentPane(p, b.dataset.ct)));
   $("#newPost").onclick = () => postEditor(p, { type }, () => contentPane(p, type));
+  if (type === "muzik") $("#bk-in").onchange = (e) => bulkMusic([...e.target.files], data || [], () => contentPane(p, type));
   bindRows(p, data, () => contentPane(p, type));
+}
+// Müziğin adı = dosyanın adı (uzantı atılır, alt çizgiler boşluğa döner)
+function titleFromFile(name) {
+  let t = name.replace(/\.[^.]+$/, "").replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  return t || name;
+}
+function audioDuration(file) {
+  return new Promise((res) => {
+    const au = document.createElement("audio"), url = URL.createObjectURL(file);
+    const done = (v) => { URL.revokeObjectURL(url); res(v); };
+    au.preload = "metadata";
+    au.onloadedmetadata = () => { const s = Math.round(au.duration || 0); done(s ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : ""); };
+    au.onerror = () => done("");
+    setTimeout(() => done(""), 8000);
+    au.src = url;
+  });
+}
+async function bulkMusic(files, existing, back) {
+  if (!files.length) return;
+  const ai = $("#bk-ai").checked, prog = $("#bk-prog"), log = $("#bk-log"), inp = $("#bk-in");
+  prog.hidden = false; inp.disabled = true;
+  let sort = existing.reduce((m, x) => Math.max(m, x.sort || 0), 0);
+  let ok = 0; const fails = [];
+  const now = Date.now();
+  for (const [i, f] of files.entries()) {
+    log.textContent = `Yükleniyor: ${i + 1} / ${files.length} · ${f.name}`;
+    try {
+      const [url, duration] = await Promise.all([upload(f, "muzik"), audioDuration(f)]);
+      const { error } = await sb.from("posts").insert({ type: "muzik", title: titleFromFile(f.name), summary: "", body: "", file_url: url, links: [], meta: { ai, duration }, sort: ++sort, published: true, created_at: new Date(now + i * 1000).toISOString() });
+      if (error) throw error;
+      ok++;
+    } catch (e) { console.error(e); fails.push(f.name + (/exceeded/.test(String(e?.message)) ? ` (${MAX_MB} MB'tan büyük)` : "")); }
+    $("i", prog).style.width = ((i + 1) / files.length) * 100 + "%";
+  }
+  inp.disabled = false;
+  toast(`${ok} müzik eklendi.${fails.length ? ` ${fails.length} dosya yüklenemedi.` : ""}`, !!fails.length && !ok);
+  if (fails.length) { log.innerHTML = "Yüklenemeyenler: " + fails.map(esc).join(", "); return; }
+  back();
 }
 function postRows(data, showNo = false) {
   return (data || []).map((x) => `<div class="q"><div class="thumb">${x.cover_url ? `<img src="${safeUrl(x.cover_url)}" alt="">` : ""}</div><div><b>${showNo && x.sort ? x.sort + ". " : ""}${esc(x.title)}</b> ${x.published ? "" : '<span class="pill dim">Taslak</span>'}<p>${esc(x.summary || "")} · ${fmtDate(x.created_at)}</p></div>
