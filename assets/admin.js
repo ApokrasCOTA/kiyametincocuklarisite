@@ -1,5 +1,5 @@
 // Yönetim paneli
-import { sb, BUCKET, PAGES, HEROES, MOODS, TYPE_LABEL, $, $$, esc, safeUrl, md, fmtDate, loadSettings, loadFonts, publicUrl, safeName } from "./core.js";
+import { sb, BUCKET, PAGES, HOME_SECTIONS, homeOrder, WIKI_SECTIONS, HEROES, MOODS, TYPE_LABEL, $, $$, esc, safeUrl, md, fmtDate, loadSettings, loadFonts, publicUrl, safeName } from "./core.js";
 import { Emitter, PDEF, SHAPES } from "./particles.js";
 
 const app = $("#app");
@@ -9,7 +9,8 @@ let tab = 0;
 let paneEmitter = null;
 let pendingCount = 0;
 
-const TABS = ["Sayfa görünümü", "Parçacıklar", "Fontlar", "İçerikler", "FRP Albümü", "Irklar", "Yorumlar", "Mesajlar", "Harita", "Genel ayarlar"];
+const TABS = ["Sayfa görünümü", "Parçacıklar", "Fontlar", "Ana sayfa & anketler", "İçerikler", "Hikayeler", "FRP Albümü", "Wiki", "Yorumlar", "Mesajlar", "Harita", "Genel ayarlar"];
+const CTAB = TABS.indexOf("Yorumlar");
 const LOOK_PAGES = PAGES;
 const PART_PAGES = [...PAGES, { k: "yonetim", t: "Yönetim paneli" }];
 
@@ -37,7 +38,9 @@ const confirmBox = (msg) => window.confirm(msg);
 async function upload(file, folder) {
   if (file.size > MAX_MB * 1024 * 1024) throw new Error(`exceeded: ${file.name}`);
   const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${safeName(file.name)}`;
-  const { error } = await sb.storage.from(BUCKET).upload(path, file, { cacheControl: "31536000", upsert: false, contentType: file.type || undefined });
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  const MIME = { glb: "model/gltf-binary", gltf: "model/gltf+json", mp3: "audio/mpeg", pdf: "application/pdf", woff2: "font/woff2", woff: "font/woff", ttf: "font/ttf", otf: "font/otf", mp4: "video/mp4", webm: "video/webm", apk: "application/vnd.android.package-archive" };
+  const { error } = await sb.storage.from(BUCKET).upload(path, file, { cacheControl: "31536000", upsert: false, contentType: MIME[ext] || file.type || "application/octet-stream" });
   if (error) throw error;
   return publicUrl(path);
 }
@@ -153,11 +156,11 @@ async function refreshPending() {
 }
 
 function shell() {
-  app.innerHTML = `<section class="admin"><aside>${TABS.map((t, i) => `<button data-tab="${i}" class="${i === tab ? "on" : ""}">${t}${i === 6 && pendingCount ? `<span class="badge">${pendingCount}</span>` : ""}</button>`).join("")}</aside><div class="pane" id="pane"></div></section>`;
+  app.innerHTML = `<section class="admin"><aside>${TABS.map((t, i) => `<button data-tab="${i}" class="${i === tab ? "on" : ""}">${t}${i === CTAB && pendingCount ? `<span class="badge">${pendingCount}</span>` : ""}</button>`).join("")}</aside><div class="pane" id="pane"></div></section>`;
   $$("[data-tab]").forEach((b) => (b.onclick = () => { tab = +b.dataset.tab; location.hash = tab; shell(); }));
   if (paneEmitter) { paneEmitter.stop(); paneEmitter = null; }
   const p = $("#pane");
-  [lookPane, particlesPane, fontsPane, contentPane, frpPane, racesPane, commentsPane, messagesPane, mapPane, generalPane][tab](p);
+  [lookPane, particlesPane, fontsPane, homePane, contentPane, storyPane, frpPane, racesPane, commentsPane, messagesPane, mapPane, generalPane][tab](p);
 }
 
 /* ---------- 0. Sayfa görünümü ---------- */
@@ -254,12 +257,12 @@ async function fontsPane(p) {
 }
 
 /* ---------- 3. İçerikler ---------- */
-const CONTENT_TYPES = ["haber", "oyun", "fanzin", "kitap", "muzik"];
+const CONTENT_TYPES = ["haber", "blog", "karakter", "oyun", "fanzin", "kitap", "muzik", "model"];
 async function contentPane(p, type = p.dataset.type || "haber") {
   p.dataset.type = type;
   p.innerHTML = '<p class="loading">Yükleniyor…</p>';
   let q = sb.from("posts").select("id,title,summary,cover_url,published,sort,created_at,meta").eq("type", type);
-  q = type === "haber" ? q.order("created_at", { ascending: false }) : q.order("sort").order("created_at", { ascending: false });
+  q = type === "haber" || type === "blog" ? q.order("created_at", { ascending: false }) : q.order("sort").order("created_at", { ascending: false });
   const { data } = await q;
   p.innerHTML = `<h2>İçerikler</h2><div class="pills">${CONTENT_TYPES.map((t) => `<button data-ct="${t}" class="${t === type ? "on" : ""}">${TYPE_LABEL[t]}</button>`).join("")}</div>
    <div><button class="btn seal" id="newPost">Yeni ${TYPE_LABEL[type].toLowerCase()} ekle</button></div>
@@ -287,13 +290,24 @@ async function postEditor(p, x, back) {
   const t = x.type, m = x.meta || {}, isNew = !x.id;
   let seasons = [];
   if (t === "frp") seasons = (await sb.from("frp_seasons").select("id,title").order("sort")).data || [];
-  const sortLabel = t === "kitap" ? "Kitap numarası" : t === "frp" ? "Bölüm numarası" : t === "haber" ? "Sıra (haberlerde tarih esas alınır)" : "Sıra (küçük sayı önce)";
-  const fileAcc = { fanzin: "application/pdf", muzik: "audio/*", oyun: "*/*", haber: "*/*", kitap: "*/*" }[t];
-  const fileLab = { fanzin: "PDF dosyası", muzik: "Müzik dosyası (MP3)", oyun: "İndirilebilir dosya (APK vb., isteğe bağlı)", haber: "Ek dosya (isteğe bağlı)", kitap: "Ek dosya, örn. ilk bölüm PDF (isteğe bağlı)" }[t];
-  const linkHelp = { kitap: "Satın alma linkleri", oyun: "Oyun linkleri (Google Play, tarayıcıda oyna…)", fanzin: "Ek linkler", muzik: "Ek linkler (Spotify, YouTube…)", haber: "Ek linkler", frp: "Ek linkler" }[t];
+  let series = [], groups = [];
+  if (t === "hikaye") series = (await sb.from("story_series").select("id,title").order("sort")).data || [];
+  if (t === "karakter") groups = [...new Set(((await sb.from("posts").select("meta").eq("type", "karakter")).data || []).map((x) => x.meta?.group).filter(Boolean))];
+  const sortLabel = t === "kitap" ? "Kitap numarası" : t === "frp" || t === "hikaye" ? "Bölüm numarası" : t === "haber" || t === "blog" ? "Sıra (burada tarih esas alınır)" : "Sıra (küçük sayı önce)";
+  const fileAcc = { fanzin: "application/pdf", muzik: "audio/*", oyun: "*/*", haber: "*/*", blog: "*/*", kitap: "*/*", model: ".glb,.gltf,model/gltf-binary" }[t];
+  const fileLab = { fanzin: "PDF dosyası", muzik: "Müzik dosyası (MP3)", oyun: "İndirilebilir dosya (APK vb., isteğe bağlı)", haber: "Ek dosya (isteğe bağlı)", blog: "Ek dosya (isteğe bağlı)", kitap: "Ek dosya, örn. ilk bölüm PDF (isteğe bağlı)", model: "3D model dosyası (GLB)" }[t];
+  const linkHelp = { kitap: "Satın alma linkleri", oyun: "Oyun linkleri (Google Play, tarayıcıda oyna…)", fanzin: "Ek linkler", muzik: "Ek linkler (Spotify, YouTube…)", haber: "Ek linkler", blog: "Ek linkler", frp: "Ek linkler", hikaye: "Ek linkler", karakter: "Ek linkler", model: "Ek linkler (Sketchfab, baskı dosyası…)" }[t];
   let extra = "";
   if (t === "oyun") extra = `<label for="m-tag">Etiket (kartta görünür)<input type="text" id="m-tag" value="${esc(m.tag || "")}" placeholder="Android · Tarayıcı"></label>
     <label for="m-embed">Sitede oynatılacak oyunun adresi (oyun bu sayfanın içinde açılır)<input type="text" id="m-embed" value="${esc(m.embed || "")}" placeholder="https://apokrascota.github.io/kartsavasi/"></label>`;
+  if (t === "hikaye") extra = `<label for="m-series">Seri<select id="m-series"><option value="">Seriye ait değil (tek bölümlük hikaye)</option>${series.map((s) => `<option value="${s.id}"${m.series === s.id ? " selected" : ""}>${esc(s.title)}</option>`).join("")}</select></label>`;
+  if (t === "karakter") extra = `<div class="row"><label for="m-epithet">Unvan / lakap (kartta görünür)<input type="text" id="m-epithet" value="${esc(m.epithet || "")}" placeholder="Bilen · Üç Maymun'dan biri"></label>
+    <label for="m-group">Grup (karakterler bu başlıklar altında listelenir)<input type="text" id="m-group" list="m-groups" value="${esc(m.group || "")}" placeholder="Protektorlar"><datalist id="m-groups">${groups.map((g) => `<option value="${esc(g)}">`).join("")}</datalist></label></div>
+    <div class="row"><label for="m-race">Irk<input type="text" id="m-race" value="${esc(m.race || "")}"></label><label for="m-books">Göründüğü kitaplar<input type="text" id="m-books" value="${esc(m.books || "")}" placeholder="Alogran Çıkmazı, Nur Şahbazları"></label></div>
+    <label class="check"><input type="checkbox" id="m-spoiler"${m.spoiler ? " checked" : ""}> Spoiler içeriyor (okur tıklayana kadar portre ve tanıtım gizli kalır)</label>`;
+  if (t === "model") extra = `<div class="row"><label for="m-tag">Etiket (kartta görünür)<input type="text" id="m-tag" value="${esc(m.tag || "")}" placeholder="Karakter · Minyatür"></label>
+    <label class="check" style="align-self:end"><input type="checkbox" id="m-dl"${m.download ? " checked" : ""}> Ziyaretçiler GLB dosyasını indirebilsin</label></div>
+    <p class="help">Model dosyası GLB formatında olmalı (Tripo, Blender vb. "GLB" olarak dışa aktarır), en fazla ${MAX_MB} MB. Kapak görseli listede ve model yüklenirken görünür.</p>`;
   if (t === "fanzin") extra = `<div class="row"><label for="m-pages">Sayfa sayısı<input type="number" id="m-pages" value="${esc(m.pages || "")}"></label><label for="m-idate">Sayı tarihi (kartta görünür)<input type="text" id="m-idate" value="${esc(m.issue_date || "")}" placeholder="Kasım 2026"></label></div>`;
   if (t === "kitap") extra = `<label for="m-status">Durum<select id="m-status">${[["yayinda", "Yayında"], ["yakinda", "Yakında"], ["muhurlu", "Mühürlü (henüz açıklanmadı)"]].map(([v, l]) => `<option value="${v}"${(m.status || "yayinda") === v ? " selected" : ""}>${l}</option>`).join("")}</select></label>`;
   if (t === "muzik") extra = `<div class="row"><label class="check"><input type="checkbox" id="m-ai"${m.ai ? " checked" : ""}> AI destekli (işaretli değilse AI'sız bölümünde görünür)</label><label for="m-dur">Süre<input type="text" id="m-dur" value="${esc(m.duration || "")}" placeholder="3:13"></label></div>`;
@@ -306,8 +320,8 @@ async function postEditor(p, x, back) {
     <label for="ed-title">Başlık<input type="text" id="ed-title" required value="${esc(x.title || "")}"></label>
     <label for="ed-sum">Kısa özet (kartlarda görünür)<input type="text" id="ed-sum" value="${esc(x.summary || "")}"></label>
     ${extra}
-    <div class="row">${fileField("ed-cover", "Kapak görseli", x.cover_url)}${t !== "frp" ? fileField("ed-file", fileLab, x.file_url, fileAcc, `En fazla ${MAX_MB} MB`) : ""}</div>
-    ${editorHtml("ed-body", x.body, t === "frp" ? "Oturum özeti" : "Metin")}
+    <div class="row">${fileField("ed-cover", t === "karakter" ? "Portre (dikey görsel önerilir)" : "Kapak görseli", x.cover_url)}${t !== "frp" && t !== "karakter" && t !== "hikaye" ? fileField("ed-file", fileLab, x.file_url, fileAcc, `En fazla ${MAX_MB} MB`) : ""}</div>
+    ${editorHtml("ed-body", x.body, t === "frp" ? "Oturum özeti" : t === "hikaye" ? "Bölümün metni" : t === "karakter" ? "Karakter tanıtımı" : "Metin")}
     <label for="ed-links">${linkHelp}: her satıra bir tane, "Yazı | link" şeklinde<textarea id="ed-links" placeholder="Satın al | https://…">${esc(linksToLines(x.links))}</textarea></label>
     <div class="row"><label for="ed-sort">${sortLabel}<input type="number" id="ed-sort" value="${x.sort ?? 0}"></label><label for="ed-date">Tarih<input type="datetime-local" id="ed-date" value="${toLocalInput(x.created_at)}"></label>
      <label class="check" style="align-self:end"><input type="checkbox" id="ed-pub"${x.published !== false ? " checked" : ""}> Yayında (işaretsizse taslak)</label></div>
@@ -322,13 +336,16 @@ async function postEditor(p, x, back) {
     if (!val("ed-title")) { toast("Başlık boş olamaz.", true); return; }
     const meta = { ...m };
     if (t === "oyun") { meta.tag = val("m-tag"); meta.embed = val("m-embed"); }
+    if (t === "model") { meta.tag = val("m-tag"); meta.download = $("#m-dl").checked; }
+    if (t === "hikaye") meta.series = val("m-series") || null;
+    if (t === "karakter") { meta.epithet = val("m-epithet"); meta.group = val("m-group"); meta.race = val("m-race"); meta.books = val("m-books"); meta.spoiler = $("#m-spoiler").checked; }
     if (t === "fanzin") { meta.pages = val("m-pages"); meta.issue_date = val("m-idate"); }
     if (t === "kitap") meta.status = val("m-status");
     if (t === "muzik") { meta.ai = $("#m-ai").checked; meta.duration = val("m-dur"); }
     if (t === "frp") { meta.season = val("m-season") || null; meta.video = val("m-video"); meta.duration = val("m-dur"); meta.players = val("m-players"); }
     const row = {
       type: t, title: val("ed-title"), summary: val("ed-sum"), body: $("#ed-body").value, cover_url: val("ed-cover") || null,
-      file_url: t !== "frp" ? val("ed-file") || null : null, links: linesToLinks($("#ed-links").value), meta,
+      file_url: $("#ed-file") ? val("ed-file") || null : null, links: linesToLinks($("#ed-links").value), meta,
       sort: num("ed-sort"), published: $("#ed-pub").checked, created_at: new Date($("#ed-date").value || Date.now()).toISOString(),
     };
     const r = isNew ? await run(sb.from("posts").insert(row).select().single(), "Kaydedildi.") : await run(sb.from("posts").update(row).eq("id", x.id).select().single(), "Kaydedildi.");
@@ -401,43 +418,139 @@ async function racesPane(p) {
   p.innerHTML = '<p class="loading">Yükleniyor…</p>';
   const [{ data: cats }, { data: races }] = await Promise.all([sb.from("race_categories").select("*").order("sort").order("created_at"), sb.from("races").select("id,category_id,name,summary,image_url,sort").order("sort").order("created_at")]);
   const back = () => racesPane(p);
-  p.innerHTML = `<h2>Irklar</h2><p class="help">Önce kategori aç (İnsanlar, Lanetliler…), sonra içine ırk ekle. Sıra numarası küçük olan önce görünür.</p>
+  const secs = [...new Set([...WIKI_SECTIONS, ...(cats || []).map((c) => c.section || "Irklar")])];
+  p.innerHTML = `<h2>Wiki</h2><p class="help">Wiki bölümlerden (Ülkeler, Irklar, Tanrılar, Mitler…), bölümler kategorilerden, kategoriler maddelerden oluşur. Önce bir kategori aç ve hangi bölüme ait olduğunu seç, sonra içine madde ekle. Yeni bir bölüm açmak için kategori açarken bölüm adına yeni bir isim yazman yeterli. Madde yazarken başka bir maddenin adını [[Sientum]] şeklinde çift köşeli parantezle yazarsan sitede o maddeye link olur.</p>
    <div><button class="btn seal" id="newCat">Yeni kategori</button></div>
-   ${(cats || []).map((c) => `<div class="box" style="display:grid;gap:6px"><div class="acts" style="justify-content:space-between"><b style="font-family:var(--font-display);font-size:18px">${esc(c.name)}</b><div class="acts"><button class="btn small seal" data-radd="${c.id}">Irk ekle</button><button class="btn small" data-cedit="${c.id}">Kategoriyi düzenle</button><button class="btn small" data-cdel="${c.id}">Sil</button></div></div>
-     ${(races || []).filter((r) => r.category_id === c.id).map((r) => `<div class="q"><div class="thumb">${r.image_url ? `<img src="${safeUrl(r.image_url)}" alt="">` : ""}</div><div><b>${esc(r.name)}</b><p>${esc(r.summary)}</p></div><div class="acts"><a class="btn small" href="/irk?id=${r.id}" target="_blank" rel="noopener">Gör</a><button class="btn small" data-redit="${r.id}">Düzenle</button><button class="btn small" data-rdel="${r.id}">Sil</button></div></div>`).join("") || '<p class="fine">Bu kategoride ırk yok.</p>'}</div>`).join("") || '<p class="fine">Henüz kategori yok.</p>'}`;
-  $("#newCat").onclick = () => catEditor(p, {}, back);
-  $$("[data-cedit]", p).forEach((b) => (b.onclick = () => catEditor(p, cats.find((c) => c.id === b.dataset.cedit), back)));
-  $$("[data-cdel]", p).forEach((b) => (b.onclick = async () => { if (!confirmBox("Kategori ve içindeki TÜM ırklar silinsin mi?")) return; if (await run(sb.from("race_categories").delete().eq("id", b.dataset.cdel), "Silindi.")) back(); }));
+   ${secs.map((sec) => { const sc = (cats || []).filter((c) => (c.section || "Irklar") === sec); if (!sc.length) return `<h3 class="adm-sec">${esc(sec)} <span class="fine">· henüz kategori yok</span></h3>`; return `<h3 class="adm-sec">${esc(sec)}</h3>` + sc.map((c) => `<div class="box" style="display:grid;gap:6px"><div class="acts" style="justify-content:space-between"><b style="font-family:var(--font-display);font-size:18px">${esc(c.name)}</b><div class="acts"><button class="btn small seal" data-radd="${c.id}">Madde ekle</button><button class="btn small" data-cedit="${c.id}">Kategoriyi düzenle</button><button class="btn small" data-cdel="${c.id}">Sil</button></div></div>
+     ${(races || []).filter((r) => r.category_id === c.id).map((r) => `<div class="q"><div class="thumb">${r.image_url ? `<img src="${safeUrl(r.image_url)}" alt="">` : ""}</div><div><b>${esc(r.name)}</b><p>${esc(r.summary)}</p></div><div class="acts"><a class="btn small" href="/irk?id=${r.id}" target="_blank" rel="noopener">Gör</a><button class="btn small" data-redit="${r.id}">Düzenle</button><button class="btn small" data-rdel="${r.id}">Sil</button></div></div>`).join("") || '<p class="fine">Bu kategoride madde yok.</p>'}</div>`).join(""); }).join("")}`;
+  $("#newCat").onclick = () => catEditor(p, {}, back, secs);
+  $$("[data-cedit]", p).forEach((b) => (b.onclick = () => catEditor(p, cats.find((c) => c.id === b.dataset.cedit), back, secs)));
+  $$("[data-cdel]", p).forEach((b) => (b.onclick = async () => { if (!confirmBox("Kategori ve içindeki TÜM maddeler silinsin mi?")) return; if (await run(sb.from("race_categories").delete().eq("id", b.dataset.cdel), "Silindi.")) back(); }));
   $$("[data-radd]", p).forEach((b) => (b.onclick = () => raceEditor(p, { category_id: b.dataset.radd }, cats, back)));
   $$("[data-redit]", p).forEach((b) => (b.onclick = async () => { const { data } = await sb.from("races").select("*").eq("id", b.dataset.redit).single(); raceEditor(p, data, cats, back); }));
-  $$("[data-rdel]", p).forEach((b) => (b.onclick = async () => { if (!confirmBox("Bu ırk silinsin mi?")) return; if (await run(sb.from("races").delete().eq("id", b.dataset.rdel), "Silindi.")) back(); }));
+  $$("[data-rdel]", p).forEach((b) => (b.onclick = async () => { if (!confirmBox("Bu madde silinsin mi?")) return; if (await run(sb.from("races").delete().eq("id", b.dataset.rdel), "Silindi.")) back(); }));
 }
-function catEditor(p, c, back) {
+function catEditor(p, c, back, secs = WIKI_SECTIONS) {
   p.innerHTML = `<div class="acts" style="justify-content:space-between"><h2>${c.id ? "Kategoriyi düzenle" : "Yeni kategori"}</h2><button class="btn small" id="cb">← Geri</button></div>
-   <form class="box" onsubmit="return false"><label for="c-n">Kategori adı<input type="text" id="c-n" value="${esc(c.name || "")}" placeholder="Lanetliler"></label>
+   <form class="box" onsubmit="return false"><div class="row"><label for="c-sec">Bölüm<input type="text" id="c-sec" list="c-secs" value="${esc(c.section || "Irklar")}"><datalist id="c-secs">${secs.map((x) => `<option value="${esc(x)}">`).join("")}</datalist></label>
+   <label for="c-n">Kategori adı<input type="text" id="c-n" value="${esc(c.name || "")}" placeholder="Lanetliler"></label></div>
    ${editorHtml("c-d", c.description, "Açıklama")}<label for="c-s">Sıra<input type="number" id="c-s" value="${c.sort ?? 0}"></label><div><button class="btn seal" id="c-save">Kaydet</button></div></form>`;
-  bindEditor("c-d", "irklar");
+  bindEditor("c-d", "wiki");
   $("#cb").onclick = back;
   $("#c-save").onclick = async () => {
     if (!val("c-n")) { toast("Kategori adı boş olamaz.", true); return; }
-    const row = { name: val("c-n"), description: $("#c-d").value, sort: num("c-s") };
+    const row = { name: val("c-n"), section: val("c-sec") || "Irklar", description: $("#c-d").value, sort: num("c-s") };
     if (await run(c.id ? sb.from("race_categories").update(row).eq("id", c.id) : sb.from("race_categories").insert(row), "Kaydedildi.")) back();
   };
 }
 function raceEditor(p, r, cats, back) {
-  p.innerHTML = `<div class="acts" style="justify-content:space-between"><h2>${r.id ? "Düzenle: " + esc(r.name) : "Yeni ırk"}</h2><button class="btn small" id="rb">← Geri</button></div>
-   <form class="box" onsubmit="return false"><div class="row"><label for="r-n">Irk adı<input type="text" id="r-n" value="${esc(r.name || "")}"></label>
-    <label for="r-c">Kategori<select id="r-c">${cats.map((c) => `<option value="${c.id}"${c.id === r.category_id ? " selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label></div>
+  p.innerHTML = `<div class="acts" style="justify-content:space-between"><h2>${r.id ? "Düzenle: " + esc(r.name) : "Yeni madde"}</h2><button class="btn small" id="rb">← Geri</button></div>
+   <form class="box" onsubmit="return false"><div class="row"><label for="r-n">Madde adı<input type="text" id="r-n" value="${esc(r.name || "")}"></label>
+    <label for="r-c">Kategori<select id="r-c">${cats.map((c) => `<option value="${c.id}"${c.id === r.category_id ? " selected" : ""}>${esc((c.section || "Irklar") + " › " + c.name)}</option>`).join("")}</select></label></div>
    <label for="r-s">Kısa tanıtım (kartta görünür)<input type="text" id="r-s" value="${esc(r.summary || "")}"></label>
    ${fileField("r-img", "Ana görsel", r.image_url)}
-   ${editorHtml("r-b", r.body, "Irkın sayfası: yazılar ve görseller")}
+   ${editorHtml("r-b", r.body, "Maddenin metni ve görselleri")}
    <label for="r-o">Sıra<input type="number" id="r-o" value="${r.sort ?? 0}"></label><div><button class="btn seal" id="r-save">Kaydet</button></div></form>`;
-  bindFiles(p, "irklar"); bindEditor("r-b", "irklar");
+  bindFiles(p, "wiki"); bindEditor("r-b", "wiki");
   $("#rb").onclick = back;
   $("#r-save").onclick = async () => {
-    if (!val("r-n")) { toast("Irk adı boş olamaz.", true); return; }
+    if (!val("r-n")) { toast("Madde adı boş olamaz.", true); return; }
     const row = { name: val("r-n"), category_id: val("r-c"), summary: val("r-s"), image_url: val("r-img") || null, body: $("#r-b").value, sort: num("r-o") };
     if (await run(r.id ? sb.from("races").update(row).eq("id", r.id) : sb.from("races").insert(row), "Kaydedildi.")) back();
+  };
+}
+
+/* ---------- Hikayeler ---------- */
+async function storyPane(p) {
+  p.innerHTML = '<p class="loading">Yükleniyor…</p>';
+  const [{ data: series }, { data: chs }] = await Promise.all([
+    sb.from("story_series").select("*").order("sort").order("created_at"),
+    sb.from("posts").select("id,title,summary,cover_url,published,sort,created_at,meta").eq("type", "hikaye").order("sort").order("created_at"),
+  ]);
+  const back = () => storyPane(p);
+  const groups = [...(series || []).map((s) => ({ s, items: (chs || []).filter((c) => c.meta?.series === s.id) })), { s: null, items: (chs || []).filter((c) => !(series || []).some((s) => s.id === c.meta?.series)) }];
+  p.innerHTML = `<h2>Hikayeler</h2><p class="help">Önce bir seri aç (kapak ve açıklamasıyla), sonra bölüm ekle ve bölümü seriye bağla. Bölüm numarası okuma sırasını belirler. Seriye bağlı olmayan bölümler "tek bölümlük hikaye" olarak görünür.</p>
+   <div class="acts" style="justify-content:flex-start"><button class="btn seal" id="newCh">Yeni bölüm ekle</button><button class="btn" id="newSer">Yeni seri</button></div>
+   ${groups.filter((g) => g.s || g.items.length).map((g) => `<div class="box" style="display:grid;gap:6px"><div class="acts" style="justify-content:space-between"><div style="display:flex;gap:12px;align-items:center">${g.s?.cover_url ? `<img src="${safeUrl(g.s.cover_url)}" alt="" style="width:44px;height:64px;object-fit:cover;border:1px solid var(--line)">` : ""}<b style="font-family:var(--font-display);font-size:18px">${g.s ? esc(g.s.title) : "Tek bölümlük hikayeler"}</b></div>${g.s ? `<div class="acts"><a class="btn small" href="/seri?id=${g.s.id}" target="_blank" rel="noopener">Gör</a><button class="btn small" data-sedit="${g.s.id}">Seriyi düzenle</button><button class="btn small" data-sdel="${g.s.id}">Seriyi sil</button></div>` : ""}</div>${postRows(g.items, true)}</div>`).join("")}`;
+  $("#newCh").onclick = () => postEditor(p, { type: "hikaye", meta: {}, sort: (chs || []).length + 1 }, back);
+  $("#newSer").onclick = () => seriesEditor(p, {}, back);
+  $$("[data-sedit]", p).forEach((b) => (b.onclick = () => seriesEditor(p, series.find((s) => s.id === b.dataset.sedit), back)));
+  $$("[data-sdel]", p).forEach((b) => (b.onclick = async () => { if (!confirmBox("Seri silinsin mi? Bölümler silinmez, tek bölümlük hikaye olarak kalır.")) return; if (await run(sb.from("story_series").delete().eq("id", b.dataset.sdel), "Seri silindi.")) back(); }));
+  bindRows(p, chs || [], back);
+}
+function seriesEditor(p, s, back) {
+  p.innerHTML = `<div class="acts" style="justify-content:space-between"><h2>${s.id ? "Seriyi düzenle" : "Yeni seri"}</h2><button class="btn small" id="sb2">← Geri</button></div>
+   <form class="box" onsubmit="return false"><label for="ss-t">Seri adı<input type="text" id="ss-t" value="${esc(s.title || "")}"></label>
+   ${fileField("ss-cover", "Seri kapağı (dikey görsel önerilir)", s.cover_url)}
+   ${editorHtml("ss-d", s.description, "Seri açıklaması")}
+   <label for="ss-s">Sıra<input type="number" id="ss-s" value="${s.sort ?? 0}"></label><div><button class="btn seal" id="ss-save">Kaydet</button></div></form>`;
+  bindFiles(p, "hikaye"); bindEditor("ss-d", "hikaye");
+  $("#sb2").onclick = back;
+  $("#ss-save").onclick = async () => {
+    if (!val("ss-t")) { toast("Seri adı boş olamaz.", true); return; }
+    const row = { title: val("ss-t"), cover_url: val("ss-cover") || null, description: $("#ss-d").value, sort: num("ss-s") };
+    if (await run(s.id ? sb.from("story_series").update(row).eq("id", s.id) : sb.from("story_series").insert(row), "Kaydedildi.")) back();
+  };
+}
+
+/* ---------- Ana sayfa & anketler ---------- */
+async function homePane(p) {
+  p.innerHTML = '<p class="loading">Yükleniyor…</p>';
+  const home = S.home || {};
+  let order = homeOrder(home);
+  const A = home.announce || {};
+  const { data: polls } = await sb.from("polls").select("*").order("sort").order("created_at", { ascending: false });
+  const label = Object.fromEntries(HOME_SECTIONS);
+  const drawOrder = () => `<div class="order">${order.map((x, i) => `<div class="order-row"><label class="check"><input type="checkbox" data-on="${i}"${x.on ? " checked" : ""}> ${esc(label[x.k])}</label><span class="acts"><button type="button" class="btn small" data-up="${i}"${i === 0 ? " disabled" : ""} aria-label="Yukarı">↑</button><button type="button" class="btn small" data-down="${i}"${i === order.length - 1 ? " disabled" : ""} aria-label="Aşağı">↓</button></span></div>`).join("")}</div>`;
+  p.innerHTML = `<h2>Ana sayfa düzeni</h2><p class="help">Ana sayfada hangi bölümlerin hangi sırayla görüneceğini seç. İçeriği olmayan bölümler zaten görünmez.</p>
+   <div id="orderBox">${drawOrder()}</div>
+   <div><button class="btn seal" id="ord-save">Düzeni kaydet</button></div>
+   <h2>Duyuru kutusu</h2><p class="help">Ana sayfada öne çıkan bir kutu: yeni kitap, etkinlik, imza günü… Başlık ve metin boşsa görünmez.</p>
+   <form class="box" onsubmit="return false"><div class="row"><label for="a-eb">Üst küçük yazı<input type="text" id="a-eb" value="${esc(A.eyebrow || "")}" placeholder="Yeni"></label><label for="a-t">Başlık<input type="text" id="a-t" value="${esc(A.title || "")}"></label></div>
+    ${fileField("a-img", "Görsel (isteğe bağlı)", A.image_url)}
+    ${editorHtml("a-body", A.body, "Metin")}
+    <div class="row"><label for="a-bl">Düğme yazısı<input type="text" id="a-bl" value="${esc(A.button_label || "")}" placeholder="Hemen oku"></label><label for="a-bu">Düğme linki<input type="text" id="a-bu" value="${esc(A.button_url || "")}" placeholder="https://kiyametincocuklari.net/…"></label></div>
+    <div class="acts" style="justify-content:flex-start"><button class="btn seal" id="a-save">Duyuruyu kaydet</button><button class="btn" id="a-clear">Duyuruyu kaldır</button></div></form>
+   <h2>Anketler</h2><p class="help">Açık anketler ana sayfada görünür. Her tarayıcıdan bir oy sayılır, ziyaretçi oyunu sonradan değiştirebilir.</p>
+   <div><button class="btn seal" id="newPoll">Yeni anket</button></div>
+   <div id="pollList">${(polls || []).map((x) => `<div class="box poll-adm" data-pid="${x.id}"><div class="acts" style="justify-content:space-between"><div><b>${esc(x.question)}</b> ${x.active ? '<span class="pill red">Açık</span>' : '<span class="pill dim">Kapalı</span>'}</div><div class="acts"><button class="btn small" data-pedit="${x.id}">Düzenle</button><button class="btn small" data-ptog="${x.id}">${x.active ? "Kapat" : "Yeniden aç"}</button><button class="btn small" data-pdel2="${x.id}">Sil</button></div></div><div class="poll-res" id="res-${x.id}"><span class="fine">Sonuçlar yükleniyor…</span></div></div>`).join("") || '<p class="fine">Henüz anket yok.</p>'}</div>`;
+  bindFiles(p, "anasayfa"); bindEditor("a-body", "anasayfa");
+  const ob = $("#orderBox");
+  ob.onclick = (e) => {
+    const up = e.target.closest("[data-up]"), dn = e.target.closest("[data-down]");
+    if (up) { const i = +up.dataset.up; [order[i - 1], order[i]] = [order[i], order[i - 1]]; ob.innerHTML = drawOrder(); }
+    if (dn) { const i = +dn.dataset.down; [order[i + 1], order[i]] = [order[i], order[i + 1]]; ob.innerHTML = drawOrder(); }
+  };
+  ob.onchange = (e) => { const c = e.target.closest("[data-on]"); if (c) order[+c.dataset.on].on = c.checked; };
+  const saveHome = (patch) => saveSetting("home", { ...(S.home || {}), ...patch });
+  $("#ord-save").onclick = () => saveHome({ sections: order });
+  $("#a-save").onclick = () => saveHome({ announce: { eyebrow: val("a-eb"), title: val("a-t"), image_url: val("a-img") || null, body: $("#a-body").value, button_label: val("a-bl"), button_url: val("a-bu") } });
+  $("#a-clear").onclick = async () => { if (!confirmBox("Duyuru kaldırılsın mı?")) return; if (await saveHome({ announce: {} })) homePane(p); };
+  $("#newPoll").onclick = () => pollEditor(p, { options: ["", ""], active: true, show_results: true });
+  $$("[data-pedit]", p).forEach((b) => (b.onclick = () => pollEditor(p, polls.find((x) => x.id === b.dataset.pedit))));
+  $$("[data-ptog]", p).forEach((b) => (b.onclick = async () => { const x = polls.find((y) => y.id === b.dataset.ptog); if (await run(sb.from("polls").update({ active: !x.active }).eq("id", x.id), x.active ? "Anket kapatıldı." : "Anket açıldı.")) homePane(p); }));
+  $$("[data-pdel2]", p).forEach((b) => (b.onclick = async () => { if (!confirmBox("Anket ve bütün oyları silinsin mi?")) return; if (await run(sb.from("polls").delete().eq("id", b.dataset.pdel2), "Anket silindi.")) homePane(p); }));
+  for (const x of polls || []) {
+    const { data: r } = await sb.rpc("poll_results", { p_poll: x.id, p_visitor: null });
+    const total = r?.total || 0, box = $("#res-" + x.id); if (!box) continue;
+    box.innerHTML = `<div class="poll-bars">${(x.options || []).map((o, i) => { const n = r?.counts?.[i] || 0, pct = total ? Math.round((n / total) * 100) : 0; return `<div class="pb"><span>${esc(o)}</span><span class="pb-bar"><i style="width:${pct}%"></i></span><span class="pb-n">${n} oy · %${pct}</span></div>`; }).join("")}</div><p class="fine">Toplam ${total} oy</p>`;
+  }
+}
+function pollEditor(p, x) {
+  p.innerHTML = `<div class="acts" style="justify-content:space-between"><h2>${x.id ? "Anketi düzenle" : "Yeni anket"}</h2><button class="btn small" id="pb2">← Geri</button></div>
+   <form class="box" onsubmit="return false"><label for="pl-q">Soru<input type="text" id="pl-q" value="${esc(x.question || "")}" placeholder="Bir sonraki kitapta en çok kimi görmek istersin?"></label>
+   <label for="pl-o">Seçenekler: her satıra bir tane<textarea id="pl-o" placeholder="Wira&#10;Hanjab&#10;Ateş">${esc((x.options || []).filter(Boolean).join("\n"))}</textarea></label>
+   ${x.id ? '<p class="help">Oy verilmiş bir anketin seçeneklerinin sırasını değiştirme; oylar sıraya göre sayılır. Yeni seçeneği en alta ekle.</p>' : ""}
+   <div class="row"><label class="check"><input type="checkbox" id="pl-a"${x.active !== false ? " checked" : ""}> Açık (ana sayfada görünsün)</label><label class="check"><input type="checkbox" id="pl-r"${x.show_results !== false ? " checked" : ""}> Oy verenler sonuçları görsün</label></div>
+   <label for="pl-s">Sıra<input type="number" id="pl-s" value="${x.sort ?? 0}"></label>
+   <div><button class="btn seal" id="pl-save">Kaydet</button></div></form>`;
+  $("#pb2").onclick = () => homePane(p);
+  $("#pl-save").onclick = async () => {
+    const opts = $("#pl-o").value.split("\n").map((s) => s.trim()).filter(Boolean);
+    if (!val("pl-q")) { toast("Soru boş olamaz.", true); return; }
+    if (opts.length < 2) { toast("En az iki seçenek yaz.", true); return; }
+    const row = { question: val("pl-q"), options: opts, active: $("#pl-a").checked, show_results: $("#pl-r").checked, sort: num("pl-s") };
+    if (await run(x.id ? sb.from("polls").update(row).eq("id", x.id) : sb.from("polls").insert(row), "Kaydedildi.")) homePane(p);
   };
 }
 
@@ -450,7 +563,7 @@ async function commentsPane(p, mode = p.dataset.mode || "bekleyen") {
    ${mode === "bekleyen" && (data || []).length > 1 ? '<div><button class="btn small seal" id="appAll">Hepsini onayla</button></div>' : ""}
    <div>${(data || []).map((c) => `<div class="q"><span></span><div><b>${esc(c.name)}</b> <span class="fine">· <a href="/icerik?id=${c.posts?.id}#yorumlar" target="_blank" rel="noopener">${esc(c.posts?.title || "")}</a> · ${fmtDate(c.created_at)}</span><p>${esc(c.body)}</p></div>
      <div class="acts">${mode === "bekleyen" ? `<button class="btn small seal" data-ap="${c.id}">Onayla</button>` : `<button class="btn small" data-un="${c.id}">Yayından kaldır</button>`}<button class="btn small" data-cd="${c.id}">Sil</button></div></div>`).join("") || `<p class="fine">${mode === "bekleyen" ? "Onay bekleyen yorum yok." : "Yayında yorum yok."}</p>`}</div>`;
-  const re = async () => { await refreshPending(); const b = $(`[data-tab="6"]`); if (b) b.innerHTML = TABS[6] + (pendingCount ? `<span class="badge">${pendingCount}</span>` : ""); commentsPane(p, mode); };
+  const re = async () => { await refreshPending(); const b = $(`[data-tab="${CTAB}"]`); if (b) b.innerHTML = TABS[CTAB] + (pendingCount ? `<span class="badge">${pendingCount}</span>` : ""); commentsPane(p, mode); };
   $$("[data-m]", p).forEach((b) => (b.onclick = () => commentsPane(p, b.dataset.m)));
   $$("[data-ap]", p).forEach((b) => (b.onclick = async () => { if (await run(sb.from("comments").update({ approved: true }).eq("id", b.dataset.ap), "Onaylandı.")) re(); }));
   $$("[data-un]", p).forEach((b) => (b.onclick = async () => { if (await run(sb.from("comments").update({ approved: false }).eq("id", b.dataset.un), "Yayından kaldırıldı.")) re(); }));

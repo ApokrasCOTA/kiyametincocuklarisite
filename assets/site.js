@@ -1,5 +1,5 @@
 // Ziyaretçi sitesi
-import { sb, PAGES, HEROES, MOODS, TYPE_PAGE, TYPE_LABEL, $, $$, esc, safeUrl, md, fmtDate, visitorId, loadSettings, loadFonts, videoEmbed } from "./core.js";
+import { sb, PAGES, NAV, homeOrder, WIKI_SECTIONS, wikiLinks, HEROES, MOODS, TYPE_PAGE, TYPE_LABEL, $, $$, esc, safeUrl, md, fmtDate, visitorId, loadSettings, loadFonts, videoEmbed } from "./core.js";
 import { Emitter, PDEF } from "./particles.js";
 
 const PAGE = document.body.dataset.page || "anasayfa";
@@ -22,10 +22,23 @@ const pageHref = (k) => (PAGES.find((p) => p.k === k) || PAGES[0]).href;
 const pageTitle = (k) => (PAGES.find((p) => p.k === k) || { t: "" }).t;
 
 function renderChrome() {
-  $("#nav").innerHTML = PAGES.map((p) => `<a href="${p.href}" data-k="${p.k}">${p.t}</a>`).join("");
+  const P = (k) => PAGES.find((p) => p.k === k);
+  const link = (k) => { const p = P(k); return `<a href="${p.href}" data-k="${p.k}">${p.t}</a>`; };
+  $("#nav").innerHTML = NAV.map((n) => typeof n === "string" ? link(n)
+    : `<div class="dd" data-g="${n.items.join(" ")}"><button type="button" class="dd-btn" aria-expanded="false">${n.g} <span aria-hidden="true">▾</span></button><div class="dd-menu">${n.items.map(link).join("")}</div></div>`).join("");
   $("#burger").onclick = () => { const o = $("#nav").classList.toggle("open"); $("#burger").setAttribute("aria-expanded", o); };
+  $$(".dd-btn").forEach((b) => (b.onclick = (e) => {
+    e.stopPropagation();
+    const dd = b.parentElement, open = !dd.classList.contains("open");
+    $$(".dd.open").forEach((x) => { x.classList.remove("open"); x.firstElementChild.setAttribute("aria-expanded", "false"); });
+    dd.classList.toggle("open", open); b.setAttribute("aria-expanded", open);
+  }));
+  document.addEventListener("click", (e) => { if (!e.target.closest(".dd")) $$(".dd.open").forEach((x) => { x.classList.remove("open"); x.firstElementChild.setAttribute("aria-expanded", "false"); }); });
 }
-function markNav(k) { $$("nav.main a").forEach((a) => a.classList.toggle("on", a.dataset.k === k)); }
+function markNav(k) {
+  $$("nav.main a").forEach((a) => a.classList.toggle("on", a.dataset.k === k));
+  $$("nav.main .dd").forEach((d) => d.classList.toggle("on", d.dataset.g.split(" ").includes(k)));
+}
 
 function applyBrand() {
   const g = S.general || {};
@@ -87,7 +100,7 @@ function fail(e) {
 const LIST_COLS = "id,type,title,summary,cover_url,file_url,links,meta,sort,created_at";
 async function posts(type, limit) {
   let q = sb.from("posts").select(LIST_COLS).eq("type", type).eq("published", true);
-  q = type === "haber" ? q.order("created_at", { ascending: false }) : q.order("sort", { ascending: true }).order("created_at", { ascending: false });
+  q = type === "haber" || type === "blog" ? q.order("created_at", { ascending: false }) : q.order("sort", { ascending: true }).order("created_at", { ascending: false });
   if (limit) q = q.limit(limit);
   const { data, error } = await q;
   if (error) throw error;
@@ -108,6 +121,14 @@ function setLike(b, on, n) { b.classList.toggle("on", on); b.setAttribute("aria-
 /* ---------- Kart şablonları ---------- */
 const newsCard = (x, big) => `<a class="card${big ? " big" : ""}" href="/icerik?id=${x.id}"><div class="art">${pic(x.cover_url, x.title)}</div><div class="body"><span class="pill">Haber</span><h3>${esc(x.title)}</h3><p>${esc(x.summary)}</p>${metaRow(x, fmtDate(x.created_at))}</div></a>`;
 const gameCard = (x) => `<a class="card" href="/icerik?id=${x.id}"><div class="art">${pic(x.cover_url, x.title)}</div><div class="body">${x.meta?.tag ? `<span class="pill">${esc(x.meta.tag)}</span>` : ""}<h3>${esc(x.title)}</h3><p>${esc(x.summary)}</p>${metaRow(x)}</div></a>`;
+const blogCard = (x) => `<a class="card" href="/icerik?id=${x.id}"><div class="art">${pic(x.cover_url, x.title)}</div><div class="body"><span class="pill">Blog</span><h3>${esc(x.title)}</h3><p>${esc(x.summary)}</p>${metaRow(x, fmtDate(x.created_at))}</div></a>`;
+const modelCard = (x) => `<a class="card model-card" href="/icerik?id=${x.id}"><div class="art">${pic(x.cover_url, x.title)}<span class="ep-badge">3D</span></div><div class="body">${x.meta?.tag ? `<span class="pill">${esc(x.meta.tag)}</span>` : ""}<h3>${esc(x.title)}</h3><p>${esc(x.summary)}</p>${metaRow(x)}</div></a>`;
+const seriesCard = (x, count) => `<a class="card series-card" href="/seri?id=${x.id}"><div class="art">${pic(x.cover_url, x.title)}</div><div class="body"><span class="pill">${count} bölüm</span><h3>${esc(x.title)}</h3><p>${esc(x.description || "")}</p></div></a>`;
+function charCard(x) {
+  const sp = x.meta?.spoiler;
+  return `<a class="char${sp ? " spoil" : ""}" href="/icerik?id=${x.id}"${sp ? ' data-spoil="1"' : ""}><div class="portrait">${pic(x.cover_url, x.title)}${sp ? '<span class="spoil-veil"><b>Spoiler</b><small>Görmek için dokun</small></span>' : ""}</div>${x.meta?.epithet ? `<span class="epithet">${esc(x.meta.epithet)}</span>` : ""}<h3>${esc(x.title)}</h3><p>${esc(x.summary)}</p></a>`;
+}
+const chapterCard = (x) => `<a class="card" href="/icerik?id=${x.id}"><div class="art">${pic(x.cover_url, x.title)}</div><div class="body"><span class="pill">Hikaye</span><h3>${esc(x.title)}</h3><p>${esc(x.summary)}</p>${metaRow(x, fmtDate(x.created_at))}</div></a>`;
 const zineCard = (x) => `<a class="zine" href="/icerik?id=${x.id}"><div class="cover">${pic(x.cover_url, x.title)}</div><div class="body"><span class="pill">PDF${x.meta?.pages ? " · " + esc(x.meta.pages) + " sayfa" : ""}</span><h3>${esc(x.title)}</h3><p>${esc(x.summary)}</p>${metaRow(x, x.meta?.issue_date || fmtDate(x.created_at))}</div></a>`;
 const STATUS = { yayinda: ["Yayında", " red"], yakinda: ["Yakında", ""], muhurlu: ["Mühürlü", " dim"] };
 function bookCard(x) {
@@ -128,19 +149,74 @@ const R = {
     applyLook("anasayfa");
     hero("anasayfa", `<div class="hero-actions"><a class="btn seal" href="/kitaplar">Seriyi keşfet</a><a class="btn" href="/harita">Haritayı aç</a></div>`);
     app.innerHTML = '<p class="loading">Yükleniyor…</p>';
-    const [news, books, games, zines, eps, music] = await Promise.all([posts("haber", 3), posts("kitap", 6), posts("oyun", 3), posts("fanzin", 2), posts("frp"), posts("muzik", 3)]);
+    const order = homeOrder(S.home).filter((x) => x.on);
+    const want = new Set(order.map((x) => x.k));
+    const get = (k, fn) => (want.has(k) ? fn() : Promise.resolve([]));
+    const [news, books, games, zines, eps, music, blogs, models, chars, series, chapters, polls] = await Promise.all([
+      get("haberler", () => posts("haber", 3)), get("kitaplar", () => posts("kitap", 6)), get("oyunlar", () => posts("oyun", 3)),
+      get("fanzinler", () => posts("fanzin", 2)), get("frp", () => posts("frp")), get("muzikler", () => posts("muzik", 3)),
+      get("blog", () => posts("blog", 3)), get("modeller", () => posts("model", 4)), get("karakterler", () => posts("karakter", 6)),
+      get("hikayeler", async () => (await sb.from("story_series").select("*").order("sort").order("created_at").limit(3)).data || []),
+      get("hikayeler", () => posts("hikaye")),
+      get("anket", async () => (await sb.from("polls").select("*").eq("active", true).order("sort").order("created_at", { ascending: false })).data || []),
+    ]);
     const lastEps = [...eps].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 3);
-    let h = "";
-    if (news.length) h += section("Son Haberler", "/haberler", "Tümü", `<div class="lead-news">${newsCard(news[0], true)}${news.length > 1 ? `<div class="stack">${news.slice(1).map((x) => newsCard(x)).join("")}</div>` : ""}</div>`);
-    if (books.length) h += section("Seri", "/kitaplar", "Tüm kitaplar", `<div class="books">${books.map(bookCard).join("")}</div>`);
-    if (games.length) h += section("Oyunlar", "/oyunlar", "Tümü", `<div class="grid">${games.map(gameCard).join("")}</div>`);
-    if (zines.length) h += section("Fanzinler", "/fanzinler", "Tüm sayılar", `<div class="zines">${zines.map(zineCard).join("")}</div>`);
-    if (lastEps.length) h += section("FRP Albümü", "/frp", "Tüm bölümler", `<div class="grid">${lastEps.map(epCard).join("")}</div>`);
-    if (music.length) h += section("Müzikler", "/muzikler", "Tümü", `<div class="tracks">${music.map(trackRow).join("")}</div>`);
+    const A = S.home?.announce || {};
+    const parts = {
+      duyuru: () => (A.title || A.body) ? `<section class="announce">${A.image_url ? `<div class="announce-img">${pic(A.image_url, A.title)}</div>` : ""}<div class="announce-body">${A.eyebrow ? `<div class="eyebrow">${esc(A.eyebrow)}</div>` : ""}${A.title ? `<h2>${esc(A.title)}</h2>` : ""}<div class="prose">${md(A.body || "")}</div>${A.button_label && safeUrl(A.button_url) ? `<div><a class="btn seal" href="${safeUrl(A.button_url)}">${esc(A.button_label)}</a></div>` : ""}</div></section>` : "",
+      anket: () => polls.length ? section(polls.length > 1 ? "Anketler" : "Anket", "", "", `<div class="polls">${polls.map(pollBox).join("")}</div>`) : "",
+      haberler: () => news.length ? section("Son Haberler", "/haberler", "Tümü", `<div class="lead-news">${newsCard(news[0], true)}${news.length > 1 ? `<div class="stack">${news.slice(1).map((x) => newsCard(x)).join("")}</div>` : ""}</div>`) : "",
+      blog: () => blogs.length ? section("Blog", "/blog", "Tüm yazılar", `<div class="grid">${blogs.map(blogCard).join("")}</div>`) : "",
+      kitaplar: () => books.length ? section("Seri", "/kitaplar", "Tüm kitaplar", `<div class="books">${books.map(bookCard).join("")}</div>`) : "",
+      hikayeler: () => series.length ? section("Hikaye Serileri", "/hikayeler", "Tüm seriler", `<div class="grid">${series.map((x) => seriesCard(x, chapters.filter((c) => c.meta?.series === x.id).length)).join("")}</div>`) : "",
+      karakterler: () => chars.length ? section("Karakterler", "/karakterler", "Tüm karakterler", `<div class="chars">${chars.map(charCard).join("")}</div>`) : "",
+      oyunlar: () => games.length ? section("Oyunlar", "/oyunlar", "Tümü", `<div class="grid">${games.map(gameCard).join("")}</div>`) : "",
+      fanzinler: () => zines.length ? section("Fanzinler", "/fanzinler", "Tüm sayılar", `<div class="zines">${zines.map(zineCard).join("")}</div>`) : "",
+      frp: () => lastEps.length ? section("FRP Albümü", "/frp", "Tüm bölümler", `<div class="grid">${lastEps.map(epCard).join("")}</div>`) : "",
+      modeller: () => models.length ? section("3D Modeller", "/modeller", "Tümü", `<div class="grid">${models.map(modelCard).join("")}</div>`) : "",
+      muzikler: () => music.length ? section("Müzikler", "/muzikler", "Tümü", `<div class="tracks">${music.map(trackRow).join("")}</div>`) : "",
+    };
+    const h = order.map((x) => (parts[x.k] ? parts[x.k]() : "")).join("");
     app.innerHTML = h || empty("Site hazırlanıyor. Çok yakında burada olacağız.");
-    fillStats([...news, ...games, ...zines, ...lastEps, ...music].map((x) => x.id));
+    bindSpoilers();
+    polls.forEach(loadPoll);
+    fillStats([...news, ...blogs, ...games, ...zines, ...lastEps, ...music, ...models].map((x) => x.id));
+  },
+  async hikayeler() {
+    applyLook("hikayeler"); hero("hikayeler");
+    const [{ data: series, error }, chapters] = await Promise.all([sb.from("story_series").select("*").order("sort").order("created_at"), posts("hikaye")]);
+    if (error) throw error;
+    const orphans = chapters.filter((c) => !(series || []).some((x) => x.id === c.meta?.series));
+    let h = (series || []).length ? `<section><div class="grid">${series.map((x) => seriesCard(x, chapters.filter((c) => c.meta?.series === x.id).length)).join("")}</div></section>` : "";
+    if (orphans.length) h += section("Tek bölümlük hikayeler", "", "", `<div class="grid">${orphans.map(chapterCard).join("")}</div>`);
+    app.innerHTML = h || empty("Henüz hikaye eklenmedi.");
+    fillStats(orphans.map((x) => x.id));
+  },
+  async seri() {
+    const id = params.get("id");
+    const [{ data: x, error }, chapters] = await Promise.all([sb.from("story_series").select("*").eq("id", id).maybeSingle(), posts("hikaye")]);
+    if (error) throw error;
+    applyLook("hikayeler");
+    if (!x) { hero("hikayeler"); app.innerHTML = empty("Bu seri bulunamadı."); return; }
+    const list = chapters.filter((c) => c.meta?.series === x.id);
+    hero("hikayeler", list.length ? `<div class="hero-actions"><a class="btn seal" href="/icerik?id=${list[0].id}">Okumaya başla</a>${list.length > 1 ? `<a class="btn" href="/icerik?id=${list[list.length - 1].id}">Son bölüm</a>` : ""}</div>` : "", { e: `<a href="/hikayeler" style="text-decoration:none">← Hikayeler</a>`, t: x.title, p: "" });
+    app.innerHTML = `<section class="series-head">${x.cover_url ? `<div class="series-cover">${pic(x.cover_url, x.title)}</div>` : ""}<div class="prose">${md(x.description || "")}<p class="fine">${list.length} bölüm</p></div></section>
+      <section><div class="sec-head"><h2>Bölümler</h2></div><ol class="chapters">${list.map((c, i) => `<li><a href="/icerik?id=${c.id}"><span class="ch-no">${c.sort || i + 1}</span><span class="ch-t"><b>${esc(c.title)}</b>${c.summary ? `<small>${esc(c.summary)}</small>` : ""}</span><span class="ch-d">${fmtDate(c.created_at)}</span></a>${likeBtn(c.id)}</li>`).join("") || '<li class="fine">Henüz bölüm yok.</li>'}</ol></section>`;
+    fillStats(list.map((c) => c.id));
+  },
+  async karakterler() {
+    applyLook("karakterler"); hero("karakterler");
+    const list = await posts("karakter");
+    if (!list.length) { app.innerHTML = empty("Henüz karakter eklenmedi."); return; }
+    const groups = [];
+    list.forEach((c) => { const g = c.meta?.group || "Diğer"; let x = groups.find((y) => y.g === g); if (!x) groups.push((x = { g, items: [] })); x.items.push(c); });
+    const multi = groups.length > 1;
+    app.innerHTML = groups.map((g) => `<section>${multi ? `<div class="sec-head"><h2>${esc(g.g)}</h2><span class="fine">${g.items.length}</span></div>` : ""}<div class="chars">${g.items.map(charCard).join("")}</div></section>`).join("");
+    bindSpoilers();
   },
   async haberler() { await listPage("haberler", "haber", (l) => `<div class="grid">${l.map((x) => newsCard(x)).join("")}</div>`, "Henüz haber yok."); },
+  async blog() { await listPage("blog", "blog", (l) => `<div class="grid">${l.map(blogCard).join("")}</div>`, "Henüz blog yazısı yok."); },
+  async modeller() { await listPage("modeller", "model", (l) => `<div class="grid">${l.map(modelCard).join("")}</div>`, "Henüz 3D model eklenmedi."); },
   async oyunlar() { await listPage("oyunlar", "oyun", (l) => `<div class="grid">${l.map(gameCard).join("")}</div>`, "Henüz oyun eklenmedi."); },
   async fanzinler() { await listPage("fanzinler", "fanzin", (l) => `<div class="zines">${l.map(zineCard).join("")}</div>`, "Henüz fanzin yok."); },
   async kitaplar() { await listPage("kitaplar", "kitap", (l) => `<div class="books">${l.map(bookCard).join("")}</div>`, "Henüz kitap eklenmedi."); },
@@ -171,30 +247,48 @@ const R = {
     applyLook("irklar"); hero("irklar");
     const [{ data: cats, error }, { data: races }] = await Promise.all([sb.from("race_categories").select("*").order("sort").order("created_at"), sb.from("races").select("id,category_id,name,summary,image_url,sort").order("sort").order("created_at")]);
     if (error) throw error;
-    if (!cats?.length) { app.innerHTML = empty("Henüz ırk eklenmedi."); return; }
-    let cur = params.get("kategori") || cats[0].id;
-    if (!cats.some((c) => c.id === cur)) cur = cats[0].id;
+    if (!cats?.length) { app.innerHTML = empty("Wiki henüz boş."); return; }
+    const secs = [...new Set([...WIKI_SECTIONS.filter((x) => cats.some((c) => (c.section || "Irklar") === x)), ...cats.map((c) => c.section || "Irklar")])];
+    const st = { sec: params.get("bolum"), cat: params.get("kategori"), q: params.get("ara") || "" };
+    if (st.cat) { const c = cats.find((x) => x.id === st.cat); if (c) st.sec = c.section || "Irklar"; }
+    if (!secs.includes(st.sec)) st.sec = secs[0];
+    const entry = (x) => { const c = cats.find((y) => y.id === x.category_id); return `<a class="race" href="/irk?id=${x.id}"><div class="portrait">${pic(x.image_url, x.name)}</div><h3>${esc(x.name)}</h3>${st.q && c ? `<span class="epithet">${esc((c.section || "Irklar") + " · " + c.name)}</span>` : ""}<p>${esc(x.summary)}</p></a>`; };
+    const sync = () => { const u = new URLSearchParams(); if (st.q) u.set("ara", st.q); else { u.set("bolum", st.sec); if (st.cat) u.set("kategori", st.cat); } history.replaceState(null, "", "?" + u); };
     const draw = () => {
-      const c = cats.find((x) => x.id === cur);
-      const items = (races || []).filter((r) => r.category_id === c.id);
-      app.innerHTML = `<section><div class="cats">${cats.map((x) => `<button data-cat="${x.id}" class="${x.id === c.id ? "on" : ""}">${esc(x.name)} <span style="color:var(--gold)">${(races || []).filter((r) => r.category_id === x.id).length}</span></button>`).join("")}</div>
-        <div class="cat-block"><h2>${esc(c.name)}</h2>${c.description ? `<div class="cat-desc prose">${md(c.description)}</div>` : ""}
-        <div class="grid">${items.map((x) => `<a class="race" href="/irk?id=${x.id}"><div class="portrait">${pic(x.image_url, x.name)}</div><h3>${esc(x.name)}</h3><p>${esc(x.summary)}</p></a>`).join("") || empty("Bu kategoride henüz ırk yok.")}</div></div></section>`;
-      $$("[data-cat]").forEach((b) => (b.onclick = () => { cur = b.dataset.cat; history.replaceState(null, "", "?kategori=" + cur); draw(); }));
+      let body;
+      if (st.q) {
+        const q = st.q.toLocaleLowerCase("tr");
+        const hits = (races || []).filter((r) => (r.name + " " + (r.summary || "")).toLocaleLowerCase("tr").includes(q));
+        body = `<div class="cat-block"><h2>"${esc(st.q)}" için ${hits.length} sonuç</h2><div class="grid">${hits.map(entry).join("") || empty("Eşleşen madde yok.")}</div></div>`;
+      } else {
+        const scats = cats.filter((c) => (c.section || "Irklar") === st.sec);
+        if (st.cat && !scats.some((c) => c.id === st.cat)) st.cat = null;
+        const shown = st.cat ? scats.filter((c) => c.id === st.cat) : scats;
+        body = `${scats.length > 1 ? `<div class="cats"><button data-cat="" class="${!st.cat ? "on" : ""}">Tümü</button>${scats.map((x) => `<button data-cat="${x.id}" class="${x.id === st.cat ? "on" : ""}">${esc(x.name)} <span style="color:var(--gold)">${(races || []).filter((r) => r.category_id === x.id).length}</span></button>`).join("")}</div>` : ""}
+          ${shown.map((c) => { const items = (races || []).filter((r) => r.category_id === c.id); return `<div class="cat-block"><h2>${esc(c.name)}</h2>${c.description ? `<div class="cat-desc prose">${md(wikiLinks(c.description, races))}</div>` : ""}<div class="grid">${items.map(entry).join("") || empty("Bu kategoride henüz madde yok.")}</div></div>`; }).join("")}`;
+      }
+      app.innerHTML = `<section class="wiki"><div class="wiki-top"><div class="tabs wiki-tabs" role="tablist">${secs.map((x) => `<button role="tab" data-sec="${esc(x)}" class="${!st.q && x === st.sec ? "on" : ""}" aria-selected="${!st.q && x === st.sec}">${esc(x)}</button>`).join("")}</div>
+        <label class="wiki-search" for="wq"><span class="sr">Wiki'de ara</span><input type="search" id="wq" placeholder="Wiki'de ara…" value="${esc(st.q)}"></label></div>${body}</section>`;
+      $$("[data-sec]").forEach((b) => (b.onclick = () => { st.sec = b.dataset.sec; st.cat = null; st.q = ""; sync(); draw(); }));
+      $$("[data-cat]").forEach((b) => (b.onclick = () => { st.cat = b.dataset.cat || null; sync(); draw(); }));
+      const wq = $("#wq");
+      wq.oninput = () => { clearTimeout(wq._t); wq._t = setTimeout(() => { st.q = wq.value.trim(); sync(); draw(); const n = $("#wq"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250); };
     };
     draw();
   },
   async irk() {
     const id = params.get("id");
-    const { data: x, error } = await sb.from("races").select("*, race_categories(id,name)").eq("id", id).maybeSingle();
+    const { data: x, error } = await sb.from("races").select("*, race_categories(id,name,section)").eq("id", id).maybeSingle();
     if (error) throw error;
     applyLook("irklar");
-    if (!x) { hero("irklar"); app.innerHTML = empty("Bu ırk bulunamadı."); return; }
-    const cat = x.race_categories || {};
-    hero("irklar", "", { e: `<a href="/irklar?kategori=${cat.id}" style="text-decoration:none">← Irklar · ${esc(cat.name)}</a>`, t: x.name, p: "" });
-    const { data: sib } = await sb.from("races").select("id,name").eq("category_id", x.category_id).order("sort");
-    app.innerHTML = `<section class="article"><div class="prose">${x.image_url ? `<figure><img src="${safeUrl(x.image_url)}" alt="${esc(x.name)}"></figure>` : ""}${x.summary ? `<p><strong>${esc(x.summary)}</strong></p>` : ""}${md(x.body)}</div>
-      <aside class="aside"><h4>Kategori</h4><a href="/irklar?kategori=${cat.id}">${esc(cat.name)}</a><h4>Aynı kategoride</h4>${(sib || []).filter((r) => r.id !== x.id).map((r) => `<a href="/irk?id=${r.id}">${esc(r.name)}</a>`).join("") || '<span class="fine">Başka ırk yok</span>'}</aside></section>`;
+    if (!x) { hero("irklar"); app.innerHTML = empty("Bu madde bulunamadı."); return; }
+    const cat = x.race_categories || {}, sec = cat.section || "Irklar";
+    hero("irklar", "", { e: `<a href="/wiki?bolum=${encodeURIComponent(sec)}" style="text-decoration:none">← Wiki · ${esc(sec)}</a> · <a href="/wiki?kategori=${cat.id}" style="text-decoration:none">${esc(cat.name)}</a>`, t: x.name, p: "" });
+    const { data: all } = await sb.from("races").select("id,name,category_id").order("sort");
+    const sib = (all || []).filter((r) => r.category_id === x.category_id && r.id !== x.id);
+    app.innerHTML = `<section class="article"><div class="prose">${x.image_url ? `<figure><img src="${safeUrl(x.image_url)}" alt="${esc(x.name)}"></figure>` : ""}${x.summary ? `<p><strong>${esc(x.summary)}</strong></p>` : ""}${md(wikiLinks(x.body, all))}</div>
+      <aside class="aside"><h4>${esc(sec)}</h4><a href="/wiki?kategori=${cat.id}">${esc(cat.name)}</a><h4>Aynı kategoride</h4>${sib.map((r) => `<a href="/irk?id=${r.id}">${esc(r.name)}</a>`).join("") || '<span class="fine">Başka madde yok</span>'}<a class="btn small" href="/wiki" style="margin-top:6px">Wiki'de ara</a></aside></section>`;
+    bindSpoilers();
   },
   async harita() {
     applyLook("harita"); hero("harita");
@@ -246,7 +340,16 @@ const R = {
     applyLook(k);
     const back = `<a href="${pageHref(k)}" style="text-decoration:none">← ${pageTitle(k)}</a>`;
     let sub = x.type === "haber" ? fmtDate(x.created_at) : "";
-    let season = null, photos = [], sibs = [];
+    let season = null, photos = [], sibs = [], storySeries = null;
+    if (x.type === "hikaye") {
+      const [ss, e] = await Promise.all([
+        x.meta?.series ? sb.from("story_series").select("id,title").eq("id", x.meta.series).maybeSingle() : Promise.resolve({ data: null }),
+        sb.from("posts").select("id,title,sort,meta,created_at").eq("type", "hikaye").eq("published", true).order("sort").order("created_at"),
+      ]);
+      storySeries = ss.data;
+      sibs = (e.data || []).filter((y) => (y.meta?.series || null) === (x.meta?.series || null));
+      sub = fmtDate(x.created_at);
+    }
     if (x.type === "frp") {
       const [s, p, e] = await Promise.all([
         x.meta?.season ? sb.from("frp_seasons").select("*").eq("id", x.meta.season).maybeSingle() : Promise.resolve({ data: null }),
@@ -257,7 +360,14 @@ const R = {
       sibs = (e.data || []).filter((y) => (y.meta?.season || null) === (x.meta?.season || null));
       sub = [fmtDate(x.created_at), x.meta?.duration, x.meta?.players].filter(Boolean).map(esc).join(" · ");
     }
-    hero(k, "", { e: back + (season ? " · " + esc(season.title) : ""), t: (x.type === "frp" && x.sort ? x.sort + ". Bölüm: " : "") + x.title, p: "" });
+    if (x.type === "karakter" && x.meta?.spoiler && !sessionStorageGet("sp_" + x.id)) {
+      hero(k, "", { e: back, t: "Spoiler içeren karakter", p: "" });
+      app.innerHTML = `<section class="spoil-gate"><p>Bu karakterin sayfası kitaplardaki önemli olayları açık edebilir.</p><button class="btn seal" id="spOk">Yine de göster</button> <a class="btn" href="${pageHref(k)}">Geri dön</a></section>`;
+      $("#spOk").onclick = () => { sessionStorageSet("sp_" + x.id); R.icerik(); };
+      return;
+    }
+    const backExtra = x.type === "hikaye" && storySeries ? ` · <a href="/seri?id=${storySeries.id}" style="text-decoration:none">${esc(storySeries.title)}</a>` : season ? " · " + esc(season.title) : "";
+    hero(k, "", { e: back + backExtra, t: ((x.type === "frp" || x.type === "hikaye") && x.sort && sibs.length > 1 ? x.sort + ". Bölüm: " : "") + x.title, p: "" });
     if (sub) $("#heroIn").insertAdjacentHTML("beforeend", `<p>${sub}</p>`);
 
     let top = "", side = "";
@@ -271,6 +381,22 @@ const R = {
       top = x.cover_url ? `<figure><img src="${safeUrl(x.cover_url)}" alt="${esc(x.title)}"></figure>` : "";
       top += fileUrl ? `<audio class="audio-full" controls preload="none" src="${fileUrl}"></audio>` : "";
       side = `<span class="pill">${x.meta?.ai ? "AI destekli" : "AI kullanılmadan"}</span>${x.meta?.duration ? `<span class="fine">${esc(x.meta.duration)}</span>` : ""}${linkBtns}`;
+    } else if (x.type === "hikaye") {
+      top = x.cover_url ? `<figure><img src="${safeUrl(x.cover_url)}" alt="${esc(x.title)}"></figure>` : "";
+      if (storySeries) side += `<a href="/seri?id=${storySeries.id}"><b>${esc(storySeries.title)}</b></a>`;
+      side += linkBtns;
+      if (sibs.length > 1) side += `<h4>Bölümler</h4>` + sibs.map((y, i) => (y.id === x.id ? `<b>${y.sort || i + 1}. ${esc(y.title)}</b>` : `<a href="/icerik?id=${y.id}">${y.sort || i + 1}. ${esc(y.title)}</a>`)).join("");
+    } else if (x.type === "karakter") {
+      const m = x.meta || {};
+      top = x.cover_url ? `<figure class="char-portrait"><img src="${safeUrl(x.cover_url)}" alt="${esc(x.title)}"></figure>` : "";
+      side = [m.epithet && `<span class="epithet">${esc(m.epithet)}</span>`, m.group && `<h4>Grup</h4><span>${esc(m.group)}</span>`, m.race && `<h4>Irk</h4><span>${esc(m.race)}</span>`, m.books && `<h4>Göründüğü kitaplar</h4><span>${esc(m.books)}</span>`].filter(Boolean).join("") + linkBtns;
+    } else if (x.type === "model") {
+      top = fileUrl
+        ? `<div class="model-stage" id="modelStage"><model-viewer id="mv" src="${fileUrl}" ${x.cover_url ? `poster="${safeUrl(x.cover_url)}"` : ""} alt="${esc(x.title)}" camera-controls touch-action="pan-y" auto-rotate auto-rotate-delay="1500" rotation-per-second="18deg" shadow-intensity="1" exposure="1" environment-image="neutral" ar ar-modes="webxr scene-viewer quick-look" interaction-prompt="auto"><button slot="ar-button" class="btn seal mv-ar">Odana yerleştir (AR)</button><div slot="progress-bar" class="mv-progress"><i id="mvBar"></i></div></model-viewer></div>
+           <div class="acts game-acts"><button class="btn" id="mvRotate">Döndürmeyi durdur</button><button class="btn" id="mvReset">Görünümü sıfırla</button><button class="btn" id="mvFs">Tam ekran</button></div>
+           <p class="fine" style="margin:-.6em 0 1.4em">Sürükleyerek döndür, tekerlek ya da iki parmakla yakınlaştır, sağ tık ya da iki parmakla kaydır.</p>`
+        : x.cover_url ? `<figure><img src="${safeUrl(x.cover_url)}" alt="${esc(x.title)}"></figure>` : "";
+      side = (x.meta?.tag ? `<span class="pill">${esc(x.meta.tag)}</span>` : "") + linkBtns + (fileUrl && x.meta?.download ? `<a class="btn" href="${fileUrl}" target="_blank" rel="noopener">Modeli indir (GLB)</a>` : "");
     } else if (x.type === "frp") {
       const v = videoEmbed(x.meta?.video || "");
       top = v ? `<div class="video"><iframe src="${v}" title="${esc(x.title)}" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe></div>` : x.cover_url ? `<figure><img src="${safeUrl(x.cover_url)}" alt="${esc(x.title)}"></figure>` : "";
@@ -291,11 +417,11 @@ const R = {
       gallery = `<h2>Masadan fotoğraflar</h2><div class="gallery">${photos.map((p, i) => `<button class="ph" data-ph="${i}" aria-label="Fotoğraf ${i + 1}">${pic(p.url, p.caption)}</button>`).join("")}</div>`;
     }
     let nav = "";
-    if (x.type === "frp" && sibs.length > 1) {
+    if ((x.type === "frp" || x.type === "hikaye") && sibs.length > 1) {
       const i = sibs.findIndex((y) => y.id === x.id), pv = sibs[i - 1], nx = sibs[i + 1];
       nav = `<div style="display:flex;justify-content:space-between;gap:12px;margin-top:28px;flex-wrap:wrap">${pv ? `<a class="btn small" href="/icerik?id=${pv.id}">← Önceki bölüm</a>` : "<span></span>"}${nx ? `<a class="btn small" href="/icerik?id=${nx.id}">Sonraki bölüm →</a>` : ""}</div>`;
     }
-    app.innerHTML = `<section class="article"><div class="prose"${x.type === "frp" || x.type === "fanzin" || (x.type === "oyun" && x.meta?.embed) ? ' style="max-width:none"' : ""}>${top}${md(x.body)}${gallery}${nav}</div>
+    app.innerHTML = `<section class="article"><div class="prose"${x.type === "frp" || x.type === "fanzin" || x.type === "model" || (x.type === "oyun" && x.meta?.embed) ? ' style="max-width:none"' : ""}>${top}${md(x.body)}${gallery}${nav}</div>
       <aside class="aside"><h4>${TYPE_LABEL[x.type]}</h4>${side}<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${likeBtn(x.id)}${ccSpan(x.id, true)}</div></aside></section>
       <section class="comments" id="yorumlar"><div class="sec-head"><h2>Yorumlar</h2></div><div id="cList"><p class="loading">Yükleniyor…</p></div>
        <form class="box" id="commentForm"><label for="c-n">Adın<input type="text" id="c-n" required maxlength="60"></label>
@@ -303,6 +429,7 @@ const R = {
         <p class="fine">Yorumlar yazar onayladıktan sonra yayınlanır. Yazdığın isim ve yorum saklanır; kişisel bilgi paylaşma.</p>
         <button class="btn seal" type="submit">Yorumu gönder</button><div id="cOut" aria-live="polite"></div></form></section>`;
     if (x.type === "fanzin" && fileUrl) openReader(x.file_url);
+    if (x.type === "model" && fileUrl) initModel();
     const fs = $("#gameFs");
     if (fs) fs.onclick = () => { const el = $("#gameFrame"); (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el); };
     if (photos.length) $$("[data-ph]").forEach((b) => (b.onclick = () => openLb(photos, +b.dataset.ph)));
@@ -334,6 +461,64 @@ async function listPage(k, type, tpl, none) {
 async function loadComments(id) {
   const { data } = await sb.from("comments").select("name,body,created_at").eq("post_id", id).eq("approved", true).order("created_at");
   $("#cList").innerHTML = (data || []).length ? data.map((c) => `<div class="comment"><b>${esc(c.name)}</b><time>${fmtDate(c.created_at)}</time><p>${esc(c.body).replace(/\n/g, "<br>")}</p></div>`).join("") : '<p class="fine">Henüz yorum yok. İlk yorumu sen yaz.</p>';
+}
+
+/* ---------- Spoiler kartları ---------- */
+function sessionStorageGet(k) { try { return sessionStorage.getItem(k); } catch { return null; } }
+function sessionStorageSet(k) { try { sessionStorage.setItem(k, "1"); } catch {} }
+function bindSpoilers() {
+  $$('[data-spoil="1"]').forEach((a) => {
+    const id = new URLSearchParams(a.getAttribute("href").split("?")[1] || "").get("id");
+    if (sessionStorageGet("sp_" + id)) { a.classList.remove("spoil"); a.querySelector(".spoil-veil")?.remove(); return; }
+    a.addEventListener("click", (e) => {
+      if (!a.classList.contains("spoil")) return;
+      e.preventDefault(); a.classList.remove("spoil"); a.querySelector(".spoil-veil")?.remove(); sessionStorageSet("sp_" + id);
+    });
+  });
+}
+
+/* ---------- Anketler ---------- */
+function pollBox(p) {
+  const opts = Array.isArray(p.options) ? p.options : [];
+  return `<div class="poll box" data-poll="${p.id}"><h3>${esc(p.question)}</h3><div class="poll-opts">${opts.map((o, i) => `<button type="button" class="poll-opt" data-choice="${i}"><span class="po-bar"></span><span class="po-t">${esc(o)}</span><span class="po-n"></span></button>`).join("")}</div><p class="fine poll-foot">Oy vermek için bir seçeneğe dokun.</p></div>`;
+}
+function drawPoll(box, r, showResults) {
+  const counts = r?.counts || [], total = r?.total || 0, mine = r?.mine;
+  const voted = mine !== null && mine !== undefined;
+  const reveal = voted && showResults !== "never";
+  $$(".poll-opt", box).forEach((b, i) => {
+    const n = counts[i] || 0, pct = total ? Math.round((n / total) * 100) : 0;
+    b.classList.toggle("mine", mine === i);
+    b.classList.toggle("shown", reveal);
+    b.querySelector(".po-bar").style.width = reveal ? pct + "%" : "0";
+    b.querySelector(".po-n").textContent = reveal ? `%${pct}` : "";
+  });
+  $(".poll-foot", box).textContent = !voted ? "Oy vermek için bir seçeneğe dokun." : reveal ? `Toplam ${total} oy · Oyunu değiştirmek için başka bir seçeneğe dokunabilirsin.` : "Oyun kaydedildi. Teşekkürler!";
+}
+async function loadPoll(p) {
+  const box = $(`[data-poll="${p.id}"]`); if (!box) return;
+  const show = p.show_results ? "after" : "never";
+  const { data } = await sb.rpc("poll_results", { p_poll: p.id, p_visitor: visitorId() });
+  drawPoll(box, data, show);
+  $$(".poll-opt", box).forEach((b) => (b.onclick = async () => {
+    box.classList.add("busy");
+    const { data: r, error } = await sb.rpc("vote_poll", { p_poll: p.id, p_visitor: visitorId(), p_choice: +b.dataset.choice });
+    box.classList.remove("busy");
+    if (error) { $(".poll-foot", box).textContent = "Oy kaydedilemedi. Anket kapanmış olabilir."; return; }
+    drawPoll(box, r, show);
+  }));
+}
+
+/* ---------- 3D model görüntüleyici ---------- */
+const MODEL_VIEWER = "https://cdn.jsdelivr.net/npm/@google/model-viewer@3.5.0/dist/model-viewer.min.js";
+function initModel() {
+  if (!customElements.get("model-viewer")) { const sc = document.createElement("script"); sc.type = "module"; sc.src = MODEL_VIEWER; document.head.appendChild(sc); }
+  const mv = $("#mv");
+  mv.addEventListener("progress", (e) => { const b = $("#mvBar"); if (b) b.style.width = Math.round(e.detail.totalProgress * 100) + "%"; if (e.detail.totalProgress >= 1) b?.parentElement?.classList.add("done"); });
+  mv.addEventListener("error", () => { $("#modelStage").insertAdjacentHTML("beforeend", '<div class="err" style="position:absolute;left:16px;right:16px;bottom:16px">Model yüklenemedi. Dosyanın GLB formatında olduğundan emin ol.</div>'); });
+  $("#mvRotate").onclick = (e) => { mv.autoRotate = !mv.autoRotate; e.target.textContent = mv.autoRotate ? "Döndürmeyi durdur" : "Kendiliğinden dönsün"; };
+  $("#mvReset").onclick = () => { mv.cameraOrbit = "auto auto auto"; mv.fieldOfView = "auto"; mv.cameraTarget = "auto auto auto"; mv.jumpCameraToGoal?.(); };
+  $("#mvFs").onclick = () => { const el = $("#modelStage"); if (document.fullscreenElement) document.exitFullscreen(); else (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el); };
 }
 
 /* ---------- Fanzin okuyucu: PDF.js + sayfa çevirme ---------- */

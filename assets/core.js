@@ -9,31 +9,46 @@ export const BUCKET = "media";
 export const PAGES = [
   { k: "anasayfa", t: "Ana Sayfa", href: "/" },
   { k: "haberler", t: "Haberler", href: "/haberler", type: "haber" },
+  { k: "blog", t: "Blog", href: "/blog", type: "blog" },
   { k: "oyunlar", t: "Oyunlar", href: "/oyunlar", type: "oyun" },
   { k: "fanzinler", t: "Fanzinler", href: "/fanzinler", type: "fanzin" },
   { k: "kitaplar", t: "Kitaplar", href: "/kitaplar", type: "kitap" },
+  { k: "hikayeler", t: "Hikayeler", href: "/hikayeler", type: "hikaye" },
   { k: "harita", t: "Evrenin Haritası", href: "/harita" },
   { k: "muzikler", t: "Müzikler", href: "/muzikler", type: "muzik" },
+  { k: "modeller", t: "3D Modeller", href: "/modeller", type: "model" },
   { k: "frp", t: "FRP Albümü", href: "/frp", type: "frp" },
-  { k: "irklar", t: "Irklar", href: "/irklar" },
+  { k: "irklar", t: "Wiki", href: "/wiki" },
+  { k: "karakterler", t: "Karakterler", href: "/karakterler", type: "karakter" },
   { k: "hakkimda", t: "Hakkımda", href: "/hakkimda" },
   { k: "iletisim", t: "İletişim", href: "/iletisim" },
 ];
+// Menü düzeni: gruplar açılır menü olarak görünür
+export const NAV = [
+  "anasayfa", "haberler", "blog", "kitaplar", "hikayeler", "fanzinler", "oyunlar",
+  { g: "Evren", items: ["harita", "irklar", "karakterler"] },
+  { g: "Medya", items: ["muzikler", "modeller", "frp"] },
+  "hakkimda", "iletisim",
+];
 export const ADMIN_PAGE = { k: "yonetim", t: "Yönetim paneli" };
-export const TYPE_PAGE = { haber: "haberler", oyun: "oyunlar", fanzin: "fanzinler", kitap: "kitaplar", muzik: "muzikler", frp: "frp" };
-export const TYPE_LABEL = { haber: "Haber", oyun: "Oyun", fanzin: "Fanzin", kitap: "Kitap", muzik: "Müzik", frp: "FRP Bölümü" };
+export const TYPE_PAGE = { haber: "haberler", blog: "blog", oyun: "oyunlar", fanzin: "fanzinler", kitap: "kitaplar", muzik: "muzikler", model: "modeller", frp: "frp", hikaye: "hikayeler", karakter: "karakterler" };
+export const TYPE_LABEL = { haber: "Haber", blog: "Blog yazısı", oyun: "Oyun", fanzin: "Fanzin", kitap: "Kitap", muzik: "Müzik", model: "3D Model", frp: "FRP Bölümü", hikaye: "Hikaye bölümü", karakter: "Karakter" };
 
 // Varsayılan sayfa başlıkları ve atmosferi (panelden değiştirilebilir)
 export const HEROES = {
   anasayfa: { e: "10 kitaplık destansı fantastik seri", t: "Kıyametin Çocukları", p: "" },
   haberler: { e: "Duyurular", t: "Haberler", p: "Yeni kitaplar, oyun güncellemeleri ve evrenden son gelişmeler." },
+  blog: { e: "Yazar masasından", t: "Blog", p: "Evrenin perde arkası, yazım süreci ve aklımdan geçenler." },
+  modeller: { e: "Üç boyutlu", t: "3D Modeller", p: "Evrenin karakterleri, yaratıkları ve nesneleri. Döndür, yakınlaştır, incele." },
   oyunlar: { e: "Oyna", t: "Oyunlar", p: "Kıyametin Çocukları evreninde geçen oyunlar: indir, tarayıcıda oyna ya da masaya kur." },
   fanzinler: { e: "E-dergiler", t: "Fanzinler", p: "Evrenden öyküler, çizimler ve söyleşiler. Sitede oku ya da PDF olarak indir." },
   kitaplar: { e: "Seri", t: "Kitaplar", p: "On kitap. Açılan her mühür bir sonrakine giden yolu gösterir." },
   harita: { e: "Atlas", t: "Evrenin Haritası", p: "Sürükleyerek gez, tekerlek ya da iki parmakla yakınlaştır." },
   muzikler: { e: "Ses", t: "Müzikler", p: "Evrenin müzikleri, AI destekli ve AI kullanılmadan üretilenler olarak iki ayrı bölümde." },
   frp: { e: "Masadan kayıtlar", t: "FRP Albümü", p: "Oynadığımız oturumlar sezon sezon, bölüm bölüm: videolar, masadan fotoğraflar ve her bölümün özeti." },
-  irklar: { e: "Halklar ve soylar", t: "Irklar", p: "Evrende yaşayan ırklar, kategorilerine göre." },
+  hikayeler: { e: "Bölüm bölüm", t: "Hikayeler", p: "Kıyametin Çocukları evreninden hikaye serileri. Bir seri seç, ilk bölümden başla." },
+  karakterler: { e: "Evrenin yüzleri", t: "Karakterler", p: "Kıyametin Çocukları'nın kahramanları, kötüleri ve arada kalanları." },
+  irklar: { e: "Evrenin ansiklopedisi", t: "Wiki", p: "Kıyametin Çocukları evreninin ülkeleri, ırkları, tanrıları ve mitleri." },
   hakkimda: { e: "Yazar", t: "Hakkımda", p: "Kıyametin Çocukları evreninin yaratıcısı." },
   iletisim: { e: "Yazara ulaş", t: "İletişim", p: "Soruların, önerilerin ve iş birliği teklifleri için." },
   yonetim: { e: "Sadece sen görürsün", t: "Yönetim Paneli", p: "" },
@@ -41,6 +56,8 @@ export const HEROES = {
 export const MOODS = {
   anasayfa: ["rgba(158,36,32,.40)", "#2a120f"],
   haberler: ["rgba(200,162,78,.22)", "#1d1710"],
+  blog: ["rgba(180,120,80,.26)", "#1e140f"],
+  modeller: ["rgba(90,120,170,.30)", "#0f131c"],
   oyunlar: ["rgba(70,110,160,.30)", "#10161f"],
   fanzinler: ["rgba(170,120,60,.30)", "#21170e"],
   kitaplar: ["rgba(158,36,32,.30)", "#24110e"],
@@ -48,6 +65,8 @@ export const MOODS = {
   muzikler: ["rgba(120,70,150,.30)", "#181020"],
   frp: ["rgba(60,140,120,.26)", "#0e1715"],
   irklar: ["rgba(190,70,40,.32)", "#22110b"],
+  hikayeler: ["rgba(150,110,70,.30)", "#1c140d"],
+  karakterler: ["rgba(158,36,32,.34)", "#200e0d"],
   hakkimda: ["rgba(158,36,32,.28)", "#1c100d"],
   iletisim: ["rgba(200,162,78,.18)", "#16130f"],
   yonetim: ["rgba(158,36,32,.25)", "#160f0d"],
@@ -141,4 +160,28 @@ export function videoEmbed(url) {
   if ((m = url.match(/twitch\.tv\/videos\/(\d+)/))) return `https://player.twitch.tv/?video=${m[1]}&${parents}&autoplay=false`;
   if ((m = url.match(/twitch\.tv\/([\w]+)\/?$/))) return `https://player.twitch.tv/?channel=${m[1]}&${parents}&autoplay=false`;
   return "";
+}
+
+// Ana sayfa bölümleri (sıra ve görünürlük panelden ayarlanır)
+export const HOME_SECTIONS = [
+  ["duyuru", "Duyuru kutusu"], ["anket", "Anketler"], ["haberler", "Son haberler"], ["blog", "Blog"],
+  ["kitaplar", "Kitaplar (Seri)"], ["hikayeler", "Hikaye serileri"], ["karakterler", "Karakterler"], ["oyunlar", "Oyunlar"],
+  ["fanzinler", "Fanzinler"], ["frp", "FRP Albümü"], ["modeller", "3D Modeller"], ["muzikler", "Müzikler"],
+];
+export function homeOrder(home) {
+  const saved = (home && home.sections) || [];
+  const known = new Set(HOME_SECTIONS.map((x) => x[0]));
+  const out = saved.filter((x) => known.has(x.k));
+  HOME_SECTIONS.forEach(([k]) => { if (!out.some((x) => x.k === k)) out.push({ k, on: true }); });
+  return out;
+}
+
+export const WIKI_SECTIONS = ["Ülkeler", "Irklar", "Tanrılar", "Mitler"];
+// [[Madde adı]] → o maddeye link (bulunamazsa düz yazı kalır)
+export function wikiLinks(text, entries) {
+  const byName = new Map((entries || []).map((e) => [e.name.toLocaleLowerCase("tr"), e.id]));
+  return String(text || "").replace(/\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g, (all, name, label) => {
+    const id = byName.get(name.trim().toLocaleLowerCase("tr"));
+    return id ? `[${(label || name).trim()}](${location.origin}/irk?id=${id})` : (label || name).trim();
+  });
 }

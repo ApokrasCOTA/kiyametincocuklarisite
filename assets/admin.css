@@ -60,3 +60,13 @@ input[type=number],input[type=password],input[type=datetime-local]{font:inherit;
   .q .thumb{display:none}
   .acts{justify-content:flex-start}
 }
+.adm-sec{font-size:15px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);border-bottom:1px solid var(--line);padding-bottom:6px;margin-top:8px}
+.order{display:grid;gap:0;border:1px solid var(--line);background:var(--ink);max-width:560px}
+.order-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 12px;border-bottom:1px solid rgba(200,162,78,.12)}
+.order-row:last-child{border-bottom:none}
+.order-row .btn[disabled]{opacity:.3;cursor:default}
+.poll-bars{display:grid;gap:6px;margin-top:8px}
+.pb{display:grid;grid-template-columns:minmax(120px,1fr) 2fr auto;gap:12px;align-items:center;font-size:15.5px}
+.pb-bar{height:10px;background:rgba(200,162,78,.12);border:1px solid var(--line)}
+.pb-bar i{display:block;height:100%;background:var(--seal)}
+.pb-n{color:var(--ash);font-variant-numeric:tabular-nums;white-space:nowrap}
